@@ -260,6 +260,10 @@ export interface VocabItem {
   lapseCount: number;      // Cumulative error count
   isLeech: boolean;        // Flagged for Sổ tay từ hay sai
   isMastered: boolean;     // Verified through 100% Test Mode
+  
+  // Sync metadata
+  updatedAt: string;       // ISO timestamp for last modification
+  unsynced?: boolean;      // Local dirty flag for Cloudflare D1 background sync
 }
 
 export interface TestRecord {
@@ -271,6 +275,7 @@ export interface TestRecord {
   isPassed: boolean;       // true strictly if correctCount === totalQuestions
   failedVocabIds: string[];
   completedAt: string;
+  unsynced?: boolean;
 }
 ```
 
@@ -282,7 +287,7 @@ export interface TestRecord {
   * Initialize Next.js 15, Tailwind CSS, and borderless light theme layout.
   * Implement Deck creation and editing (Title, HSK Level, Custom Topic).
   * Implement "Nhập" view for direct manual and delimited vocabulary input.
-  * Implement persistence layer and atomic session state storage.
+  * Implement IndexedDB (`Dexie.js`) local persistence + Cloudflare D1 3-layer auto-sync.
   * Build Vocab Management view using `<DataTable />` with light styling and zero borders.
 
 * **Phase 2: Practice Track (Variable 10 to 30 Words)**
@@ -303,19 +308,32 @@ export interface TestRecord {
 
 ---
 
-## 8. Deployment & Infrastructure Architecture (Cloudflare Pages 100% Free Tier)
+## 8. Deployment, Storage & 3-Layer Sync Architecture (Cloudflare 100% Free Tier)
 
-### 8.1 Hosting Architecture
-* **Platform**: Cloudflare Pages (Global Anycast Edge CDN).
-* **Operating Cost**: $0.00 / month forever.
-  * Bandwidth: Unlimited.
-  * Static Requests: Unlimited.
-  * SSL / Custom Domain: Free automated SSL.
-  * Deployment Limit: 500 builds per month.
+### 8.1 Hosting & Database Limits ($0.00 / Month Forever)
+* **Frontend & Edge API**: Cloudflare Pages + Pages Functions (Git CI/CD auto-deploy on `git push origin main`).
+  * Bandwidth & Static Requests: Unlimited.
+  * Build Limit: 500 builds/month.
+* **Cloud Database**: **Cloudflare D1 (Serverless SQLite at the Edge — Free Tier)**:
+  * Storage: **5 GB total** (up to 10 databases at 500 MB each; ~2,000,000+ vocabulary records per DB).
+  * Free Reads: **5,000,000 rows read / day**.
+  * Free Writes: **100,000 rows written / day**.
 
-### 8.2 Zero-Server Compute Model
-1. **Compute & Algorithmic Execution**:
-   * All algorithms (Ebbinghaus decay calculation, FSRS stability, 70/30 rolling snowball interleaving, and 100% test validation) execute using the user's device CPU.
-   * Server CPU load during active study: Strictly 0%.
-2. **Latency & Offline Resilience**:
-   * Read and write latency during study: 0ms (instantaneous local memory transactions).
+### 8.2 Zero-Server-Overload Compute Model
+* During active practice and testing, **100% of calculations** (Ebbinghaus decay, FSRS stability, 70/30 rolling snowball, timers, and answer grading) execute on the **user's device CPU** against local **IndexedDB**.
+* Server requests during active card-by-card study: **Strictly 0 requests**.
+
+### 8.3 The 4-Layer Automatic Sync Engine
+To ensure zero data loss across tab closes, phone locks, or Wi-Fi drops without requiring a manual "Save" button:
+
+1. **Layer 1 — Instant Local Commit (0.1ms)**:
+   * Every card flip, match, or typed answer immediately writes to local `IndexedDB` (`Dexie.js`), updates `updatedAt`, and sets `unsynced = true`.
+   * Active session state is also stored locally so refreshing the browser at card 27/30 resumes directly at card 27/30.
+2. **Layer 2 — Normal Session / Edit Batch Sync**:
+   * Whenever a practice session completes, a test concludes, or a deck is created/edited, the client sends **1 single batched `POST /api/sync` request** to Cloudflare D1 and clears `unsynced = false`.
+3. **Layer 3 — Sudden Tab Close / Phone Lock (`navigator.sendBeacon`)**:
+   * Listeners on `document.onvisibilitychange` (`visibilityState === 'hidden'`) and `window.onpagehide` detect when the user suddenly closes the browser tab (`X`), switches apps, or locks their phone mid-session.
+   * The browser immediately dispatches all `unsynced = true` records via `navigator.sendBeacon('/api/sync', payload)` (and `fetch` with `keepalive: true`), which the OS network stack guarantees to deliver in the background even after the tab is closed.
+4. **Layer 4 — Offline / Power-Loss Startup Reconciliation**:
+   * If the user's Wi-Fi was disconnected or battery died mid-session, the `unsynced = true` records remain safely in local `IndexedDB`.
+   * On the next app launch with internet connectivity, the startup hook automatically pushes pending `unsynced` records to Cloudflare D1 and pulls any newer remote changes by comparing `updatedAt` timestamps.
