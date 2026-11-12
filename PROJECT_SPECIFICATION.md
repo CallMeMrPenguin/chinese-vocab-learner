@@ -299,3 +299,29 @@ export interface TestRecord {
   * Implement 70/30 Rolling Snowball queue.
   * Implement dynamic Ebbinghaus decay calculator ($R(t)$).
   * Implement Full-Deck Comprehensive Certification Test.
+
+---
+
+## 9. Deployment & Infrastructure Architecture (Cloudflare Pages 100% Free Tier)
+
+### 9.1 Hosting Architecture
+* **Platform**: Cloudflare Pages (Global Anycast Edge CDN).
+* **Build Target**: Static Site Generation (Next.js Static Export: `output: 'export'`).
+* **Operating Cost**: $0.00 / month forever.
+  * Bandwidth: Unlimited.
+  * Static Requests: Unlimited.
+  * SSL / Custom Domain: Free automated SSL.
+  * Deployment Limit: 500 builds per month.
+
+### 9.2 Zero-Server Data & Compute Model
+1. **Database Layer (Local-First IndexedDB)**:
+   * Client-side database managed via `Dexie.js` (~15KB library).
+   * All user decks, word statistics, streak counts, and review histories reside directly in the user's browser IndexedDB.
+   * Server storage footprint: Strictly 0 bytes.
+2. **Compute & Algorithmic Execution**:
+   * All algorithms (Ebbinghaus decay calculation, FSRS stability, 70/30 rolling snowball interleaving, and 100% test validation) execute using the user's device CPU.
+   * Server CPU load: Strictly 0%.
+3. **Latency & Offline Resilience**:
+   * Read and write latency: 0ms (instantaneous local memory transactions).
+   * Fully functional offline once the initial static bundle is cached.
+
