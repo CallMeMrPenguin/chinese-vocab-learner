@@ -11,10 +11,10 @@ This project is a high-efficiency Chinese vocabulary learning application design
 1. **Âm Hán Việt Advantage**: Over 60% to 70% of Vietnamese vocabulary shares etymological roots with Chinese. The system explicitly maps Sino-Vietnamese readings (Âm Hán Việt) and morphological root-compounds for every character and phrase.
 2. **Strict Mastery Learning**: No partial passes. A deck is only certified as mastered when the learner achieves 100% accuracy under exam conditions.
 3. **Flexible Session Slicing (10 to 30 words)**: Learners choose their active practice batch size, with in-session spacing and interleaving automatically recalibrating to match.
-4. **Decay Prevention & Anti-Recency Engine**: Solves the "forgot the beginning by the time I reached the end" problem through cumulative 70/30 interleaving and living Ebbinghaus decay tracking.
-5. **Customizable Deck Metadata**: Full control to rename decks, assign HSK levels (HSK 1 to HSK 6+), and define custom topics (e.g., Du lịch, Công sở, Ẩm thực).
-6. **Automatic Persistence**: Progress, deck health, and review state save automatically to local storage after every single interaction with zero manual export steps required.
-7. **Borderless Light Minimalist Design**: Clean, light, flat canvas architecture with zero borders, strict typographic hierarchy, no nested cards, and strictly zero emojis or unsolicited UI clutter.
+4. **Dual-Direction Keyboard Writing Mode**: Separate progression tracks for typing in Chinese (`writingZhStep`) and typing in Vietnamese (`writingViStep`), with intelligent synonym parsing and homonym disambiguation.
+5. **Decay Prevention & Anti-Recency Engine**: Solves the "forgot the beginning by the time I reached the end" problem through cumulative 70/30 interleaving and living Ebbinghaus decay tracking.
+6. **Customizable Deck Metadata**: Full control to rename decks, assign HSK levels (HSK 1 to HSK 6+), and define custom topics (e.g., Du lịch, Công sở, Ẩm thực).
+7. **Borderless Light Minimalist Design**: Clean, light, flat canvas architecture with zero borders, tonal interactive fills, strict typographic hierarchy, no nested cards, and strictly zero emojis or unsolicited UI clutter.
 
 ---
 
@@ -35,12 +35,12 @@ Every metric, batch threshold, and review interval in this system is derived fro
 ### C. Automaticity & Perceptual Latency (Matching Modality)
 * **Citation**: Schneider, W., & Shiffrin, R. M. (1977). *Controlled and automatic human information processing: I. Detection, search, and attention*. Psychological Review, 84(1), 1-66.
 * **Principle**: Distinguishes controlled processing (slow, deliberate) from automatic processing (instant reflex). Fluid vocabulary usage requires lexical access latency to drop below working memory contention thresholds ($\le 2.0\text{ seconds}$ per item).
-* **System Metric**: A match is counted as a clean pass only if completed in $\le 2.0\text{ seconds}$ with zero misclicks. 2 consecutive clean rounds complete the mode.
+* **System Metric**: Served in micro-boards of 4 to 5 pairs (8 to 10 tiles) per screen to eliminate visual search bottlenecks. A match is counted as a clean pass only if completed in $\le 2.0\text{ seconds}$ per pair with zero misclicks. 2 consecutive clean rounds complete the mode.
 
-### D. The Orthographic Motor Generation Effect (Writing Modality)
-* **Citation**: Tan, L. H., Spinks, J. A., Eden, G. F., Perfetti, C. A., & Siok, W. T. (2005). *Reading depends on writing, in Chinese*. Proceedings of the National Academy of Sciences (PNAS), 102(24), 8781-8785. Slamecka, N. J., & Graf, P. (1978). *The Generation Effect*. Journal of Experimental Psychology: Human Learning and Memory, 4(6), 592-604.
-* **Principle**: Chinese logographic characters rely heavily on neuromuscular motor programs stored in the left middle frontal gyrus (Exner's area). Writing the character from scratch produces deeper memory consolidation than passive recognition.
-* **System Metric**: Blank-canvas production from Vietnamese cue. 2 consecutive unassisted generations with 0 hints required.
+### D. The Generation Effect & Bidirectional Production (Writing Modality)
+* **Citation**: Slamecka, N. J., & Graf, P. (1978). *The Generation Effect: Delineation of a phenomenon*. Journal of Experimental Psychology: Human Learning and Memory, 4(6), 592-604.Webb, S. (2005). *Receptive and productive vocabulary learning*. Studies in Second Language Acquisition, 27(1), 33-52.
+* **Principle**: Actively generating a target response via keyboard input from a cue produces significantly stronger memory traces than passive recognition. Productive recall (Meaning $\to$ Target Form) and receptive-productive translation (Target Form $\to$ Native Meaning) develop distinct lexical pathways and require independent tracking.
+* **System Metric**: Two independent keyboard writing tracks—Chinese Input (`writingZhStep`) and Vietnamese Input (`writingViStep`). Each track requires 2 consecutive unassisted clean generations with 0 hints.
 
 ### E. Scaled Spacing & Variable Session Sizing (10 to 30 words)
 * **Citation**: Sweller, J. (1988). *Cognitive Load Theory*. Cowan, N. (2001). *The magical number 4 in short-term memory*. Behavioral and Brain Sciences, 24(1), 87-114.
@@ -89,8 +89,9 @@ For decks with multiple batches, subsequent sessions automatically draw:
 * $N_{\text{new}} = \lceil 0.70 \times N \rceil$ (new words from the unlearned queue).
 * $N_{\text{review}} = N - N_{\text{new}}$ (words with lowest retrievability $R(t)$ from previously practiced batches).
 
-#### C. Session Completion Gate
-A session of $N$ words terminates only when **every single word has reached the clean pass target**. If errors occur, the session extends dynamically until all $N$ words are verified clean.
+#### C. Session Completion Gate & Atomic Session Resume
+* A session of $N$ words terminates only when **every single word has reached the clean pass target**. If errors occur, the session extends dynamically until all $N$ words are verified clean.
+* **Atomic Session Resume**: Every card interaction immediately persists the active queue state. Closing or refreshing the browser mid-session (e.g. at card 27/30) resumes directly at card 27/30 upon return.
 
 ---
 
@@ -100,46 +101,54 @@ A session of $N$ words terminates only when **every single word has reached the 
 * **Screen Display**:
   * Front: Hanzi (Hero Text).
   * Back: Pinyin, Âm Hán Việt, Vietnamese definition (Small Text).
+* **UX Safeguard**: Tapping the center stage flips the card; grading buttons (`Quên` | `Gợi ý` | `Đã nhớ`) occupy a fixed bottom zone with a 150ms debounce lock after flipping to prevent accidental double-clicks.
 * **Scoring Rules**:
   * Tap "Nhớ" (No hint viewed): Step advances (+1).
   * Tap "Gợi ý" (Hint viewed): Step remains unchanged.
   * Tap "Quên" (Failed): Step resets to 0; card re-inserted $S_{\text{gap}}$ cards later.
-* **Completion Target**: 3 clean retrievals.
+* **Completion Target**: 3 clean retrievals (`flashcardStep === 3`).
 
 #### B. Matching Mode (Ghép Thẻ Phản Xạ)
 * **Screen Display**:
-  * Clean flat grid of tiles (Hanzi, Pinyin, Nghĩa tiếng Việt / Âm Hán Việt).
+  * **Micro-Board Slicing**: Regardless of session size $N$ (10 to 30), tiles are served in micro-boards of **4 to 5 pairs (8 to 10 tiles) per screen** at a time so visual scanning time never distorts cognitive recall latency.
   * Active timer and error counter.
 * **Scoring Rules**:
   * Clean Pass: All pairs matched with 0 misclicks and average response time $\le 2.0\text{ seconds}$ per pair.
   * Sub-optimal: 0 misclicks, but average time $> 2.0\text{ seconds}$ (no step gain; requires speed replay).
   * Misclick Penalty: Any error immediately resets the streak to 0.
-* **Completion Target**: 2 consecutive clean passes.
+* **Completion Target**: 2 consecutive clean passes (`matchingStep === 2`).
 
-#### C. Writing Mode (Tự Viết Từ Vựng)
-* **Screen Display**:
-  * Prompt: Vietnamese meaning (Hero Text).
-  * Input Area: Interactive flat drawing canvas.
-  * Action controls: "Xem mẫu", "Xóa", "Xác nhận".
-* **Scoring Rules**:
-  * Clean Pass: Accurate character production with zero hints.
-  * Hint Used: Viewing model resets step counter to 0.
+#### C. Writing Mode (Gõ Từ Vựng - Bàn Phím)
+* **Input Method**: Strictly keyboard text input (`<input type="text">`, no drawing canvas).
+* **Two Independent Tracks (Learner Chooses Direction)**:
+  1. **Viết Tiếng Trung (`writingZhStep`: 0 to 2)**:
+     * Prompt: Vietnamese meaning (Hero Text).
+     * **Homonym Disambiguation**: If two or more words in the deck share the same Vietnamese meaning (e.g. `但是` and `可是` both meaning `"Nhưng"`), the prompt automatically appends the `Âm Hán Việt` in Small Text (`Nhưng | Đãn thị` vs. `Nhưng | Khả thị`) to eliminate ambiguity.
+     * Input: Learner types the exact Chinese characters (`学习`).
+  2. **Viết Tiếng Việt (`writingViStep`: 0 to 2)**:
+     * Prompt: Hanzi (Hero Text).
+     * Input: Learner types the Vietnamese meaning.
+     * **Smart Synonym Parsing**: Meanings separated by commas, semicolons, or slashes (e.g. `"Chuẩn bị, sẵn sàng / dự bị"`) are tokenized. Typing *any* valid individual meaning (case-insensitive, whitespace-trimmed, e.g. `"chuẩn bị"`) is graded as 100% correct.
+* **Scoring Rules (Both Tracks)**:
+  * Clean Pass: Accurate keyboard input with zero hints (+1 step).
+  * Hint Used ("Xem gợi ý"): Step resets to 0.
   * Incorrect Input: Step resets to 0; card recycled $S_{\text{gap}}$ cards later.
-* **Completion Target**: 2 consecutive unassisted generations.
+* **Completion Target**: 2 consecutive unassisted generations per track (`writingZhStep === 2` and `writingViStep === 2`).
 
 ---
 
 ### 4.3 Test Mode & Mix Mode
 
 #### A. Single-Skill Test
-* Evaluates words on a single challenge format (Flashcard, Matching, or Writing).
+* Evaluates words on a single challenge format (Flashcard, Matching, Writing Chinese, or Writing Vietnamese).
 * Passing threshold: **Strictly 100%**.
 
 #### B. Mix Mode (Chế Độ Hỗn Hợp)
-* Shuffles words across three question archetypes:
+* Shuffles words across four question archetypes:
   1. **Recognition**: Hanzi prompt $\to$ Select correct Vietnamese / Âm Hán Việt within 5 seconds.
-  2. **Speed Match**: 4 pairs timed match within 12 seconds.
-  3. **Production Writing**: Vietnamese prompt $\to$ Write Hanzi from memory with zero assistance.
+  2. **Speed Match**: 4 pairs timed match micro-board within 8 seconds.
+  3. **Production Writing (Chinese)**: Vietnamese prompt (+ Âm Hán Việt if homonym) $\to$ Type Hanzi via keyboard.
+  4. **Production Writing (Vietnamese)**: Hanzi prompt $\to$ Type Vietnamese meaning via keyboard.
 
 #### C. Full-Deck Certification Test
 * The capstone evaluation covering **100% of the deck's words**.
@@ -174,9 +183,9 @@ $$R(t) = e^{-\frac{t}{S}}$$
 
 The entire user interface strictly follows a **borderless, light, flat canvas architecture**:
 
-### 5.1 Color Palette
+### 5.1 Color Palette & Tonal Affordance
 * **Page Canvas Background**: Pure white `#ffffff` or clean off-white `#fafafa`.
-* **Surface Tones (Flat Blocks)**: Light warm neutral `#f4f4f5` or `#f1f5f9`.
+* **Interactive Surface Tones (Buttons, Tiles, Input Boxes)**: Distinct flat neutral fill `#f1f5f9` with hover/focus state `#e2e8f0` so interactive click and typing targets are immediately recognizable without borders.
 * **Primary Typography**: Crisp high-contrast slate `#0f172a`.
 * **Secondary Typography & Metadata**: Muted slate `#64748b`.
 * **Active Tone**: Deep cobalt `#2563eb` or monochrome slate `#0f172a`.
@@ -187,7 +196,7 @@ The entire user interface strictly follows a **borderless, light, flat canvas ar
 * **Strict Rule**: No `border`, `border-gray-*`, or `divide-*` lines may be used anywhere.
 * **Separation Mechanism**: Visual structure is created purely using:
   1. Generous negative space (padding: `p-6`, `p-8`, margins: `mb-6`, `gap-6`).
-  2. Flat tonal contrast (subtle `#f4f4f5` background fills against pure `#ffffff` canvas).
+  2. Flat tonal contrast (`#f1f5f9` interactive surfaces against `#ffffff` canvas).
   3. Clear typographic scale.
 
 ### 5.3 Flat Hierarchy (Strictly No "Card-in-Card")
@@ -214,16 +223,7 @@ The entire user interface strictly follows a **borderless, light, flat canvas ar
 
 ---
 
-## 6. Persistence Architecture
-
-* **Automatic Persistence**:
-  * Uses local **IndexedDB** storage.
-  * Review state, word counters, and test histories save automatically after every single card interaction or test completion.
-  * No manual export or save button required.
-
----
-
-## 7. Data Schema
+## 6. Data Schema
 
 ```typescript
 export interface Deck {
@@ -244,30 +244,31 @@ export interface VocabItem {
   hanzi: string;
   pinyin: string;
   amHanViet: string;
-  meaningVi: string;
+  meaningVi: string;       // Supports comma/slash separated synonyms
   hskLevel?: string;       // Individual word HSK level tag
   charCount: number;
   
   // Progression fields
-  flashcardStep: number;    // 0 to 3
-  matchingStep: number;     // 0 to 2
-  writingStep: number;      // 0 to 2
+  flashcardStep: number;   // 0 to 3
+  matchingStep: number;    // 0 to 2
+  writingZhStep: number;   // 0 to 2 (Prompt: Vietnamese -> Type: Chinese)
+  writingViStep: number;   // 0 to 2 (Prompt: Chinese -> Type: Vietnamese)
   
   // Memory & SRS state
-  stability: number;        // S factor in days
-  lastReviewedAt?: string;  // ISO timestamp
-  lapseCount: number;       // Cumulative error count
-  isLeech: boolean;         // Flagged for Sổ tay từ hay sai
-  isMastered: boolean;      // Verified through 100% Test Mode
+  stability: number;       // S factor in days
+  lastReviewedAt?: string; // ISO timestamp
+  lapseCount: number;      // Cumulative error count
+  isLeech: boolean;        // Flagged for Sổ tay từ hay sai
+  isMastered: boolean;     // Verified through 100% Test Mode
 }
 
 export interface TestRecord {
   id: string;
   deckId: string;
-  mode: 'flashcard' | 'matching' | 'writing' | 'mix';
+  mode: 'flashcard' | 'matching' | 'writing-zh' | 'writing-vi' | 'mix';
   totalQuestions: number;
   correctCount: number;
-  isPassed: boolean;        // true strictly if correctCount === totalQuestions
+  isPassed: boolean;       // true strictly if correctCount === totalQuestions
   failedVocabIds: string[];
   completedAt: string;
 }
@@ -275,20 +276,20 @@ export interface TestRecord {
 
 ---
 
-## 8. Development Roadmap
+## 7. Development Roadmap
 
 * **Phase 1: Project Initialization & Data Layer**
   * Initialize Next.js 15, Tailwind CSS, and borderless light theme layout.
   * Implement Deck creation and editing (Title, HSK Level, Custom Topic).
   * Implement "Nhập" view for direct manual and delimited vocabulary input.
-  * Implement IndexedDB auto-persistence layer.
+  * Implement persistence layer and atomic session state storage.
   * Build Vocab Management view using `<DataTable />` with light styling and zero borders.
 
 * **Phase 2: Practice Track (Variable 10 to 30 Words)**
   * Implement dynamic batch selector (10, 15, 20, 25, 30).
-  * Build Flashcard Mode with scaled spacing.
-  * Build Matching Mode with 2.0s latency validation.
-  * Build Flat Writing Canvas Mode.
+  * Build Flashcard Mode with scaled spacing and 150ms flip debounce.
+  * Build Matching Mode with 4-5 pair micro-boards and 2.0s latency validation.
+  * Build Keyboard Writing Mode with separate Chinese (`writingZhStep`) and Vietnamese (`writingViStep`) tracks, synonym parsing, and homonym disambiguation.
 
 * **Phase 3: Test Track & Sổ Tay Từ Hay Sai**
   * Build 100% Criterion Test Engine.
@@ -302,26 +303,19 @@ export interface TestRecord {
 
 ---
 
-## 9. Deployment & Infrastructure Architecture (Cloudflare Pages 100% Free Tier)
+## 8. Deployment & Infrastructure Architecture (Cloudflare Pages 100% Free Tier)
 
-### 9.1 Hosting Architecture
+### 8.1 Hosting Architecture
 * **Platform**: Cloudflare Pages (Global Anycast Edge CDN).
-* **Build Target**: Static Site Generation (Next.js Static Export: `output: 'export'`).
 * **Operating Cost**: $0.00 / month forever.
   * Bandwidth: Unlimited.
   * Static Requests: Unlimited.
   * SSL / Custom Domain: Free automated SSL.
   * Deployment Limit: 500 builds per month.
 
-### 9.2 Zero-Server Data & Compute Model
-1. **Database Layer (Local-First IndexedDB)**:
-   * Client-side database managed via `Dexie.js` (~15KB library).
-   * All user decks, word statistics, streak counts, and review histories reside directly in the user's browser IndexedDB.
-   * Server storage footprint: Strictly 0 bytes.
-2. **Compute & Algorithmic Execution**:
+### 8.2 Zero-Server Compute Model
+1. **Compute & Algorithmic Execution**:
    * All algorithms (Ebbinghaus decay calculation, FSRS stability, 70/30 rolling snowball interleaving, and 100% test validation) execute using the user's device CPU.
-   * Server CPU load: Strictly 0%.
-3. **Latency & Offline Resilience**:
-   * Read and write latency: 0ms (instantaneous local memory transactions).
-   * Fully functional offline once the initial static bundle is cached.
-
+   * Server CPU load during active study: Strictly 0%.
+2. **Latency & Offline Resilience**:
+   * Read and write latency during study: 0ms (instantaneous local memory transactions).
