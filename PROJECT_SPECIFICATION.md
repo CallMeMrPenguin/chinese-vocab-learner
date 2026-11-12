@@ -12,7 +12,9 @@ This project is a high-efficiency Chinese vocabulary learning application design
 2. **Strict Mastery Learning**: No partial passes. A deck is only certified as mastered when the learner achieves 100% accuracy under exam conditions.
 3. **Flexible Session Slicing (10 to 30 words)**: Learners choose their active practice batch size, with in-session spacing and interleaving automatically recalibrating to match.
 4. **Decay Prevention & Anti-Recency Engine**: Solves the "forgot the beginning by the time I reached the end" problem through cumulative 70/30 interleaving and living Ebbinghaus decay tracking.
-5. **Borderless Light Minimalist Design**: Clean, light, flat canvas architecture with zero borders, no nested card layouts, and strictly zero emojis.
+5. **Smart Auto-Enrichment Input**: User pastes Chinese words; the system automatically maps Pinyin, Âm Hán Việt, and definitions via a bundled offline dictionary dataset with zero API calls.
+6. **Automatic Persistence**: Progress, deck health, and review state save automatically to local storage after every single interaction with zero manual export steps required.
+7. **Borderless Light Minimalist Design**: Clean, light, flat canvas architecture with zero borders, strict typographic hierarchy, no nested cards, and strictly zero emojis or unsolicited UI clutter.
 
 ---
 
@@ -52,27 +54,27 @@ Every metric, batch threshold, and review interval in this system is derived fro
 
 ---
 
-## 3. System Architecture & Dual-Track Model
+## 3. Smart Input & Auto-Enrichment Pipeline
 
-The application strictly separates learning into two operational tracks:
+Because all vocabulary is user-provided, the application utilizes a bundled, offline dictionary mapping index (CC-CEDICT + Sino-Vietnamese tables) to eliminate manual data entry friction:
 
 ```
-+-------------------------------------------------------------------+
-|                        PRACTICE TRACK                             |
-|  - Configurable Batch Size: 10 to 30 words (Learner's choice)     |
-|  - Formative Learning with Hints Allowed                          |
-|  - Modes: Flashcard | Matching | Writing                          |
-|  - Progress: Clean Streak Counter per mode                        |
-+-------------------------------------------------------------------+
-                                  |
-                                  v
-+-------------------------------------------------------------------+
-|                          TEST TRACK                               |
-|  - Summative Evaluation: 100% Pass Threshold (Bloom Criterion)    |
-|  - Modes: Single-Skill Test | Mix Mode | Full-Deck Certification  |
-|  - Zero Hints, Strictly Timed                                     |
-|  - Failed Words -> Sổ Tay Từ Hay Sai (Targeted Quarantine)        |
-+-------------------------------------------------------------------+
+[ User Input Area ]
+- Paste raw Hanzi list: 学习 \n 准备 \n 工作
+  OR
+- Paste delimited list: 学习 - học tập \n 准备 - chuẩn bị
+                         |
+                         v
+[ Local Offline Auto-Enrichment (Zero APIs) ]
+- Extracts Hanzi characters
+- Resolves Pinyin with tone marks: xuéxí, zhǔnbèi, gōngzuò
+- Resolves Âm Hán Việt: Học tập, Chuẩn bị, Công tác
+- Resolves standard Vietnamese definition if omitted
+                         |
+                         v
+[ Flat Preview Table ]
+- User verifies or edits custom meanings
+- Taps "Xác nhận tạo bộ từ" -> Instantly active
 ```
 
 ---
@@ -81,7 +83,7 @@ The application strictly separates learning into two operational tracks:
 
 ### 4.1 Variable Session Sizing (10 to 30 Words)
 
-Learners can select their preferred practice batch size $N \in [10, 30]$ via a minimal slider or numerical selector (10, 15, 20, 25, 30).
+Learners select their active batch size $N \in [10, 30]$ via a minimal flat selector (10, 15, 20, 25, 30).
 
 #### A. In-Session Spacing Calculation
 When an error occurs during practice, the failed item is re-inserted after $S_{\text{gap}}$ intervening cards:
@@ -95,7 +97,7 @@ $$S_{\text{gap}} = \max\left(3, \left\lfloor \frac{N}{4} \right\rfloor\right)$$
 #### B. The 70/30 Rolling Snowball
 For decks with multiple batches, subsequent sessions automatically draw:
 * $N_{\text{new}} = \lceil 0.70 \times N \rceil$ (new words from the unlearned queue).
-* $N_{\text{review}} = N - N_{\text{new}}$ (words with the lowest retrievability $R(t)$ from previously practiced batches).
+* $N_{\text{review}} = N - N_{\text{new}}$ (words with lowest retrievability $R(t)$ from previously practiced batches).
 
 #### C. Session Completion Gate
 A session of $N$ words terminates only when **every single word has reached the clean pass target**. If errors occur, the session extends dynamically until all $N$ words are verified clean.
@@ -106,8 +108,8 @@ A session of $N$ words terminates only when **every single word has reached the 
 
 #### A. Flashcard Mode (Lật Thẻ)
 * **Screen Display**:
-  * Front: Hanzi, audio playback trigger, example sentence with blanked target word.
-  * Back: Pinyin, Âm Hán Việt, Vietnamese definition, complete example sentence.
+  * Front: Hanzi (Hero Text), audio trigger.
+  * Back: Pinyin, Âm Hán Việt, Vietnamese definition (Small Text).
 * **Scoring Rules**:
   * Tap "Nhớ" (No hint viewed): Step advances (+1).
   * Tap "Gợi ý" (Hint viewed): Step remains unchanged.
@@ -126,8 +128,8 @@ A session of $N$ words terminates only when **every single word has reached the 
 
 #### C. Writing Mode (Tự Viết Từ Vựng)
 * **Screen Display**:
-  * Prompt: Vietnamese meaning + optional audio cue.
-  * Input Area: Interactive flat drawing canvas or character composition field.
+  * Prompt: Vietnamese meaning + audio cue.
+  * Input Area: Interactive flat drawing canvas.
   * Action controls: "Xem mẫu", "Xóa", "Xác nhận".
 * **Scoring Rules**:
   * Clean Pass: Accurate character production with zero hints.
@@ -180,14 +182,14 @@ $$R(t) = e^{-\frac{t}{S}}$$
 
 ## 5. UI/UX Specification: Borderless Light Minimalist Standard
 
-The entire user interface must strictly follow a **borderless, light, flat canvas architecture**:
+The entire user interface strictly follows a **borderless, light, flat canvas architecture**:
 
 ### 5.1 Color Palette
 * **Page Canvas Background**: Pure white `#ffffff` or clean off-white `#fafafa`.
 * **Surface Tones (Flat Blocks)**: Light warm neutral `#f4f4f5` or `#f1f5f9`.
 * **Primary Typography**: Crisp high-contrast slate `#0f172a`.
 * **Secondary Typography & Metadata**: Muted slate `#64748b`.
-* **Accent / Focus Tone**: Deep cobalt `#2563eb` or monochrome slate `#0f172a`.
+* **Active Tone**: Deep cobalt `#2563eb` or monochrome slate `#0f172a`.
 * **Success Tone**: Subdued emerald `#059669`.
 * **Error Tone**: Subdued rose `#e11d48`.
 
@@ -196,26 +198,50 @@ The entire user interface must strictly follow a **borderless, light, flat canva
 * **Separation Mechanism**: Visual structure is created purely using:
   1. Generous negative space (padding: `p-6`, `p-8`, margins: `mb-6`, `gap-6`).
   2. Flat tonal contrast (subtle `#f4f4f5` background fills against pure `#ffffff` canvas).
-  3. Clear typographic scale (font size and font weight differentiation).
+  3. Clear typographic scale.
 
 ### 5.3 Flat Hierarchy (Strictly No "Card-in-Card")
 * **Strict Rule**: Nested card layouts (a card inside another card container) are strictly forbidden.
 * Every interactive surface sits directly on the flat page canvas without nested borders or multi-layered container boxes.
 * The study arena is an open, breathable workspace with the target word as the direct focal point.
 
-### 5.4 Strictly Prohibit Emojis
-* **Strict Rule**: Emojis are strictly forbidden across all headers, buttons, badges, status meters, and dialogues.
+### 5.4 Typography Hierarchy: Hero Text vs. Small Text
+* **Hero Text (Primary Focus)**:
+  * Size: 64px to 80px (`text-6xl` to `text-7xl`), bold (`font-bold`), deep charcoal (`#0f172a`).
+  * Fixed Container: Centered in a fixed-height container (`h-32 flex items-center justify-center`) to eliminate layout shift across different word lengths.
+* **Small Text (Metadata & Prompts)**:
+  * Size: Strictly 14px (`text-sm`), medium weight (`font-medium`), muted slate (`#64748b`).
+  * Separators: Multi-item metadata must be separated strictly by clean vertical pipes (`|`), never bullet dots or symbols.
+  * Alignment: Strictly aligned beneath the hero text with fixed margin offset.
+
+### 5.5 Zero Unsolicited Information (No Clutter)
+* Strictly **no** random tips, motivational quotes, "Did you know?" boxes, or unsolicited notes anywhere in the UI.
+* Information is revealed **only upon deliberate user action** (e.g., tapping "Gợi ý").
+
+### 5.6 Strictly Prohibit Emojis
+* **Strict Rule**: Emojis are strictly prohibited across all headers, buttons, badges, status meters, and dialogues.
 * Interface feedback uses clean typography (e.g., "Chính xác", "Chưa đạt", "Gợi ý", "Hoàn thành") and simple vector wireframe glyphs where appropriate.
 
 ---
 
-## 6. Data Schema
+## 6. Persistence & Audio Architecture
+
+1. **Automatic Persistence**:
+   * Uses local **IndexedDB** storage.
+   * Review state, word counters, and test histories save automatically after every single card interaction or test completion.
+   * No manual export or save button required.
+2. **Local Audio Pronunciation**:
+   * Utilizes pre-downloaded, bundled local audio files or local browser synthesis.
+   * Zero third-party cloud API dependencies, zero network latency, 100% offline functionality.
+
+---
+
+## 7. Data Schema
 
 ```typescript
 export interface Deck {
   id: string;
   title: string;
-  description?: string;
   totalWords: number;
   masteredWords: number;
   healthPercent: number; // Dynamic Ebbinghaus health (0 - 100)
@@ -230,8 +256,6 @@ export interface VocabItem {
   pinyin: string;
   amHanViet: string;
   meaningVi: string;
-  exampleSentenceZh?: string;
-  exampleSentenceVi?: string;
   audioUrl?: string;
   charCount: number;
   
@@ -262,12 +286,13 @@ export interface TestRecord {
 
 ---
 
-## 7. Development Roadmap
+## 8. Development Roadmap
 
 * **Phase 1: Project Initialization & Data Layer**
   * Initialize Next.js 15, Tailwind CSS, and borderless light theme layout.
+  * Implement offline dictionary dataset lookup for Pinyin and Âm Hán Việt auto-enrichment.
+  * Implement IndexedDB auto-persistence layer.
   * Build Vocab Management view using `<DataTable />` with light styling and zero borders.
-  * Implement input auto-enrichment for Pinyin and Âm Hán Việt.
 
 * **Phase 2: Practice Track (Variable 10 to 30 Words)**
   * Implement dynamic batch selector (10, 15, 20, 25, 30).
