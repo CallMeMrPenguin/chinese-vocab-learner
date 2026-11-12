@@ -12,7 +12,7 @@ This project is a high-efficiency Chinese vocabulary learning application design
 2. **Strict Mastery Learning**: No partial passes. A deck is only certified as mastered when the learner achieves 100% accuracy under exam conditions.
 3. **Flexible Session Slicing (10 to 30 words)**: Learners choose their active practice batch size, with in-session spacing and interleaving automatically recalibrating to match.
 4. **Decay Prevention & Anti-Recency Engine**: Solves the "forgot the beginning by the time I reached the end" problem through cumulative 70/30 interleaving and living Ebbinghaus decay tracking.
-5. **Smart Auto-Enrichment Input**: User pastes Chinese words; the system automatically maps Pinyin, Âm Hán Việt, and definitions via a bundled offline dictionary dataset with zero API calls.
+5. **Customizable Deck Metadata**: Full control to rename decks, assign HSK levels (HSK 1 to HSK 6+), and define custom topics (e.g., Du lịch, Công sở, Ẩm thực).
 6. **Automatic Persistence**: Progress, deck health, and review state save automatically to local storage after every single interaction with zero manual export steps required.
 7. **Borderless Light Minimalist Design**: Clean, light, flat canvas architecture with zero borders, strict typographic hierarchy, no nested cards, and strictly zero emojis or unsolicited UI clutter.
 
@@ -54,28 +54,18 @@ Every metric, batch threshold, and review interval in this system is derived fro
 
 ---
 
-## 3. Smart Input & Auto-Enrichment Pipeline
+## 3. Deck Management & Input Specifications
 
-Because all vocabulary is user-provided, the application utilizes a bundled, offline dictionary mapping index (CC-CEDICT + Sino-Vietnamese tables) to eliminate manual data entry friction:
+### 3.1 Deck Metadata & Customization
+When creating or editing any deck, the learner has full control over:
+* **Tên bộ từ (Title)**: Editable at any time.
+* **Cấp độ (HSK Level)**: HSK 1, HSK 2, HSK 3, HSK 4, HSK 5, HSK 6, hoặc Tự do.
+* **Chủ đề (Custom Topic)**: User-defined tag (e.g., Giao tiếp, Du lịch, Ẩm thực, Thương mại, Đời sống).
 
-```
-[ User Input Area ]
-- Paste raw Hanzi list: 学习 \n 准备 \n 工作
-  OR
-- Paste delimited list: 学习 - học tập \n 准备 - chuẩn bị
-                         |
-                         v
-[ Local Offline Auto-Enrichment (Zero APIs) ]
-- Extracts Hanzi characters
-- Resolves Pinyin with tone marks: xuéxí, zhǔnbèi, gōngzuò
-- Resolves Âm Hán Việt: Học tập, Chuẩn bị, Công tác
-- Resolves standard Vietnamese definition if omitted
-                         |
-                         v
-[ Flat Preview Table ]
-- User verifies or edits custom meanings
-- Taps "Xác nhận tạo bộ từ" -> Instantly active
-```
+### 3.2 Nhập Từ Vựng (Vocabulary Entry)
+* **Tab / Action Label**: Strictly labeled **Nhập**.
+* **Phase 1 Method**: Direct manual entry and clean text list paste (e.g. `学习 - học tập`).
+* **Feature Status (Smart Auto-Enrichment)**: Marked cleanly in the UI as **Nhập (Đang phát triển)** for future automated dictionary parsing.
 
 ---
 
@@ -108,7 +98,7 @@ A session of $N$ words terminates only when **every single word has reached the 
 
 #### A. Flashcard Mode (Lật Thẻ)
 * **Screen Display**:
-  * Front: Hanzi (Hero Text), audio trigger.
+  * Front: Hanzi (Hero Text).
   * Back: Pinyin, Âm Hán Việt, Vietnamese definition (Small Text).
 * **Scoring Rules**:
   * Tap "Nhớ" (No hint viewed): Step advances (+1).
@@ -128,7 +118,7 @@ A session of $N$ words terminates only when **every single word has reached the 
 
 #### C. Writing Mode (Tự Viết Từ Vựng)
 * **Screen Display**:
-  * Prompt: Vietnamese meaning + audio cue.
+  * Prompt: Vietnamese meaning (Hero Text).
   * Input Area: Interactive flat drawing canvas.
   * Action controls: "Xem mẫu", "Xóa", "Xác nhận".
 * **Scoring Rules**:
@@ -147,7 +137,7 @@ A session of $N$ words terminates only when **every single word has reached the 
 
 #### B. Mix Mode (Chế Độ Hỗn Hợp)
 * Shuffles words across three question archetypes:
-  1. **Recognition**: Audio/Hanzi prompt $\to$ Select correct Vietnamese / Âm Hán Việt within 5 seconds.
+  1. **Recognition**: Hanzi prompt $\to$ Select correct Vietnamese / Âm Hán Việt within 5 seconds.
   2. **Speed Match**: 4 pairs timed match within 12 seconds.
   3. **Production Writing**: Vietnamese prompt $\to$ Write Hanzi from memory with zero assistance.
 
@@ -224,15 +214,12 @@ The entire user interface strictly follows a **borderless, light, flat canvas ar
 
 ---
 
-## 6. Persistence & Audio Architecture
+## 6. Persistence Architecture
 
-1. **Automatic Persistence**:
-   * Uses local **IndexedDB** storage.
-   * Review state, word counters, and test histories save automatically after every single card interaction or test completion.
-   * No manual export or save button required.
-2. **Local Audio Pronunciation**:
-   * Utilizes pre-downloaded, bundled local audio files or local browser synthesis.
-   * Zero third-party cloud API dependencies, zero network latency, 100% offline functionality.
+* **Automatic Persistence**:
+  * Uses local **IndexedDB** storage.
+  * Review state, word counters, and test histories save automatically after every single card interaction or test completion.
+  * No manual export or save button required.
 
 ---
 
@@ -242,9 +229,11 @@ The entire user interface strictly follows a **borderless, light, flat canvas ar
 export interface Deck {
   id: string;
   title: string;
+  topic?: string;          // User-defined topic/category (e.g. "Du lịch", "Công sở")
+  hskLevel?: string;       // HSK level tag (e.g. "HSK 1", "HSK 2", "HSK 3", "HSK 4", "HSK 5", "HSK 6", "Tự do")
   totalWords: number;
   masteredWords: number;
-  healthPercent: number; // Dynamic Ebbinghaus health (0 - 100)
+  healthPercent: number;   // Dynamic Ebbinghaus health (0 - 100)
   createdAt: string;
   updatedAt: string;
 }
@@ -256,7 +245,7 @@ export interface VocabItem {
   pinyin: string;
   amHanViet: string;
   meaningVi: string;
-  audioUrl?: string;
+  hskLevel?: string;       // Individual word HSK level tag
   charCount: number;
   
   // Progression fields
@@ -290,7 +279,8 @@ export interface TestRecord {
 
 * **Phase 1: Project Initialization & Data Layer**
   * Initialize Next.js 15, Tailwind CSS, and borderless light theme layout.
-  * Implement offline dictionary dataset lookup for Pinyin and Âm Hán Việt auto-enrichment.
+  * Implement Deck creation and editing (Title, HSK Level, Custom Topic).
+  * Implement "Nhập" view for direct manual and delimited vocabulary input.
   * Implement IndexedDB auto-persistence layer.
   * Build Vocab Management view using `<DataTable />` with light styling and zero borders.
 
