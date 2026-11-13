@@ -28,61 +28,75 @@ export function calculateRetention(lastReviewedAt?: string, stability: number = 
   return Math.max(0.1, Math.min(1.0, r));
 }
 
-// Seed HSK 3 and HSK 4 if database is brand new or needs repair for empty meanings
+let seedingPromise: Promise<void> | null = null;
+
+// Seed HSK 3 and HSK 4 safely with concurrency lock and idempotent bulkPut
 export async function seedInitialDecks(): Promise<void> {
-  const deckCount = await db.decks.count();
-  if (deckCount > 0) {
-    const brokenCount = await db.vocab
-      .filter((w) => !w.meaningVi || w.meaningVi.trim() === '' || /^từ(\/|\s)/i.test(w.meaningVi.trim()))
-      .count();
-    if (brokenCount === 0) return;
-    await db.vocab.clear();
-    await db.decks.clear();
-  }
+  if (seedingPromise) return seedingPromise;
 
-  try {
-    // 1. Seed HSK 3
-    const resp3 = await fetch('/data/hsk3.json');
-    if (resp3.ok) {
-      const hsk3Words: VocabItem[] = await resp3.json();
-      const hsk3Deck: Deck = {
-        id: 'deck_hsk3',
-        title: 'Từ vựng HSK 3',
-        topic: 'Đề cương HSK 3.0',
-        hskLevel: 'HSK 3',
-        totalWords: hsk3Words.length,
-        masteredWords: 0,
-        healthPercent: 100,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      await db.decks.add(hsk3Deck);
-      const itemsWithDeck = hsk3Words.map(w => ({ ...w, deckId: 'deck_hsk3' }));
-      await db.vocab.bulkAdd(itemsWithDeck);
-    }
+  seedingPromise = (async () => {
+    try {
+      const deckCount = await db.decks.count();
+      const vocabCount = await db.vocab.count();
 
-    // 2. Seed HSK 4
-    const resp4 = await fetch('/data/hsk4.json');
-    if (resp4.ok) {
-      const hsk4Words: VocabItem[] = await resp4.json();
-      const hsk4Deck: Deck = {
-        id: 'deck_hsk4',
-        title: 'Từ vựng HSK 4',
-        topic: 'Đề cương HSK 3.0',
-        hskLevel: 'HSK 4',
-        totalWords: hsk4Words.length,
-        masteredWords: 0,
-        healthPercent: 100,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      await db.decks.add(hsk4Deck);
-      const itemsWithDeck = hsk4Words.map(w => ({ ...w, deckId: 'deck_hsk4' }));
-      await db.vocab.bulkAdd(itemsWithDeck);
+      if (deckCount >= 2 && vocabCount >= 1500) {
+        const brokenCount = await db.vocab
+          .filter((w) => !w.meaningVi || w.meaningVi.trim() === '' || /^từ(\/|\s)/i.test(w.meaningVi.trim()))
+          .count();
+        if (brokenCount === 0) return;
+      }
+
+      // 1. Seed HSK 3
+      const resp3 = await fetch('/data/hsk3.json');
+      if (resp3.ok) {
+        const hsk3Words: VocabItem[] = await resp3.json();
+        const existingDeck3 = await db.decks.get('deck_hsk3');
+        if (!existingDeck3) {
+          await db.decks.put({
+            id: 'deck_hsk3',
+            title: 'Từ vựng HSK 3',
+            topic: 'Đề cương HSK 3.0',
+            hskLevel: 'HSK 3',
+            totalWords: hsk3Words.length,
+            masteredWords: 0,
+            healthPercent: 100,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          });
+        }
+        const itemsWithDeck3 = hsk3Words.map((w) => ({ ...w, deckId: 'deck_hsk3' }));
+        await db.vocab.bulkPut(itemsWithDeck3);
+      }
+
+      // 2. Seed HSK 4
+      const resp4 = await fetch('/data/hsk4.json');
+      if (resp4.ok) {
+        const hsk4Words: VocabItem[] = await resp4.json();
+        const existingDeck4 = await db.decks.get('deck_hsk4');
+        if (!existingDeck4) {
+          await db.decks.put({
+            id: 'deck_hsk4',
+            title: 'Từ vựng HSK 4',
+            topic: 'Đề cương HSK 3.0',
+            hskLevel: 'HSK 4',
+            totalWords: hsk4Words.length,
+            masteredWords: 0,
+            healthPercent: 100,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          });
+        }
+        const itemsWithDeck4 = hsk4Words.map((w) => ({ ...w, deckId: 'deck_hsk4' }));
+        await db.vocab.bulkPut(itemsWithDeck4);
+      }
+    } catch (err) {
+      console.error('Error seeding initial decks:', err);
+    } finally {
+      seedingPromise = null;
     }
-  } catch (err) {
-    console.error('Error seeding initial decks:', err);
-  }
+  })();
+
+  return seedingPromise;
 }
 
 // Update deck stats
@@ -106,4 +120,3 @@ export async function refreshDeckStats(deckId: string): Promise<void> {
     updatedAt: new Date().toISOString()
   });
 }
-
