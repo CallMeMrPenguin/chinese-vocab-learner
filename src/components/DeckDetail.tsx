@@ -392,3 +392,4 @@ export function DeckDetail({
     </div>
   );
 }
+

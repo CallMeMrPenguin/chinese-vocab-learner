@@ -88,3 +88,4 @@ export function MistakeNotebook({ leechWords, onBack, onStartDrill }: MistakeNot
     </div>
   );
 }
+

@@ -61,3 +61,4 @@ export interface ActiveSessionWord {
   cleanPasses: number;     // passes in current session
   sessionFails: number;
 }
+

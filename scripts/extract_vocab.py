@@ -187,3 +187,4 @@ with open('public/data/all_vocab.json', 'w', encoding='utf-8') as f:
     json.dump(all_vocab, f, ensure_ascii=False, indent=2)
 
 print('Successfully written public/data/hsk3.json and public/data/hsk4.json!')
+
