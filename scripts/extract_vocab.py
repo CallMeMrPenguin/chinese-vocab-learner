@@ -129,12 +129,23 @@ print(f'Extracted HSK 3: {len(hsk3_words)} words')
 # 4. Extract HSK 4
 hsk4_words = []
 doc4 = fitz.open('tu_vung_hsk_4_prep_3c740feed1.pdf')
+POS_PREFIXES = (
+    'Danh', 'Động', 'Tính', 'Phó', 'Đại', 'Liên', 'Giới',
+    'Lượng', 'Trợ', 'Thán', 'Số', 'Cụm', 'Thành', 'Quán', 'Từ'
+)
+
 for page in doc4:
     blocks = page.get_text('blocks')
+    # Sort blocks by vertical Y center, then X
+    blocks.sort(key=lambda b: (round(b[1] / 12), b[0]))
     for b in blocks:
         text = b[4].strip()
         lines = [l.strip() for l in text.split('\n') if l.strip()]
-        if not lines: continue
+        if not lines:
+            continue
+        if lines[0] == 'STT' or 'Chữ Hán' in lines[0]:
+            continue
+
         m = re.match(r'^(\d{1,4})\s*(.*)', lines[0])
         if m:
             stt = int(m.group(1))
@@ -145,24 +156,26 @@ for page in doc4:
                 rest = rest[1:]
             clean_hz = re.sub(r'\d+$', '', raw_hz).strip()
             pinyin = clean_pinyin(rest[0] if len(rest) > 0 else '')
-            POS_PREFIXES = (
-                'Danh', 'Động', 'Tính', 'Phó', 'Đại', 'Liên', 'Giới',
-                'Lượng', 'Trợ', 'Thán', 'Số', 'Cụm', 'Thành', 'Quán', 'Từ'
-            )
-            if len(rest) > 2 and rest[1].startswith(POS_PREFIXES):
+
+            if len(rest) >= 2 and rest[1].startswith(POS_PREFIXES):
                 pos = rest[1]
-                meaning = ' '.join(rest[2:])
-                # Clean wrapped POS fragments at the start of meaning (e.g. "từ/Danh từ ...", "từ ...")
-                m_wrap = re.match(r'^((?:từ|ngữ)(?:\s*/\s*(?:Danh|Động|Tính|Phó|Đại|Liên|Giới|Lượng|Trợ|Thán|Số)\s*từ)*)\s+(.*)', meaning, flags=re.IGNORECASE)
-                if m_wrap:
-                    pos = f"{pos} {m_wrap.group(1)}".strip()
-                    meaning = m_wrap.group(2).strip()
-            elif len(rest) == 2 and not rest[1].startswith(POS_PREFIXES):
+                meaning_lines = rest[2:]
+                # Only if pos wrapped right before "từ" (e.g. "Tính từ/Động" + "từ...")
+                if not pos.lower().endswith('từ') and not pos.lower().endswith('ngữ') and meaning_lines:
+                    first_m = meaning_lines[0]
+                    m_wrap = re.match(r'^(từ(?:/(?:Danh|Động|Tính|Phó|Đại|Liên|Giới|Lượng|Trợ|Thán|Số)\s*từ)*)\b\s*(.*)', first_m)
+                    if m_wrap:
+                        pos = f"{pos} {m_wrap.group(1)}".strip()
+                        rem = m_wrap.group(2).strip()
+                        meaning_lines = ([rem] if rem else []) + meaning_lines[1:]
+                meaning = ' '.join(meaning_lines).strip()
+            elif len(rest) >= 2:
                 pos = 'Từ vựng'
-                meaning = rest[1]
+                meaning = ' '.join(rest[1:]).strip()
             else:
-                pos = rest[1] if len(rest) > 2 else 'Từ vựng'
-                meaning = ' '.join(rest[2:]) if len(rest) > 2 else (rest[1] if len(rest) > 1 else '')
+                pos = 'Từ vựng'
+                meaning = ''
+
             am_han_viet = get_hanviet(clean_hz)
             hsk4_words.append({
                 'id': f'hsk4_{stt}',
@@ -185,6 +198,18 @@ for page in doc4:
                 'isMastered': False,
                 'updatedAt': '2026-11-13T15:00:00Z'
             })
+        elif hsk4_words:
+            # Continuation block on the right column for the current row (like 432 客气)
+            extra = ' '.join(lines).strip()
+            if extra and not extra.isdigit():
+                prev = hsk4_words[-1]
+                if not prev['pos'].lower().endswith('từ') and extra.startswith('từ'):
+                    m_wrap = re.match(r'^(từ(?:/(?:Danh|Động|Tính|Phó|Đại|Liên|Giới|Lượng|Trợ|Thán|Số)\s*từ)*)\b\s*(.*)', extra)
+                    if m_wrap:
+                        prev['pos'] = f"{prev['pos']} {m_wrap.group(1)}".strip()
+                        extra = m_wrap.group(2).strip()
+                if extra:
+                    prev['meaningVi'] = (f"{prev['meaningVi']} {extra}").strip()
 
 # Sort by stt
 hsk4_words.sort(key=lambda x: x['stt'])

@@ -17,7 +17,7 @@ interface TestArenaProps {
 
 interface TestQuestion {
   vocab: VocabItem;
-  type: 'flashcard' | 'writing-zh' | 'writing-vi';
+  type: 'writing-zh' | 'writing-vi';
   prompt: string;
   subPrompt?: string;
   expectedAnswers: string[];
@@ -87,7 +87,7 @@ export function TestArena({
       setQuestions(
         sourceWords.map((w) => ({
           vocab: w,
-          type: 'flashcard',
+          type: 'writing-vi',
           prompt: w.hanzi,
           expectedAnswers: [w.meaningVi],
         }))
@@ -97,19 +97,12 @@ export function TestArena({
     }
 
     const list: TestQuestion[] = sourceWords.map((w) => {
-      let qType: 'flashcard' | 'writing-zh' | 'writing-vi' = 'writing-zh';
+      let qType: 'writing-zh' | 'writing-vi' = 'writing-zh';
 
       if (testMode === 'mix') {
-        const types: Array<'flashcard' | 'writing-zh' | 'writing-vi'> = [
-          'flashcard',
-          'writing-zh',
-          'writing-vi',
-        ];
-        qType = types[Math.floor(Math.random() * types.length)];
+        qType = Math.random() < 0.5 ? 'writing-zh' : 'writing-vi';
       } else if (testMode === 'writing-vi') {
         qType = 'writing-vi';
-      } else if (testMode === 'flashcard') {
-        qType = 'flashcard';
       } else {
         qType = 'writing-zh';
       }
@@ -118,12 +111,13 @@ export function TestArena({
         return {
           vocab: w,
           type: qType,
-          prompt: w.meaningVi.split(/[,;\/]/)[0].trim(),
+          prompt: w.meaningVi.replace(/^\([^)]+\)\s*/g, '').split(/[,;\/]/)[0].trim(),
           subPrompt: w.amHanViet || undefined,
           expectedAnswers: [w.hanzi.trim().toLowerCase()],
         };
       } else {
         const synonyms = w.meaningVi
+          .replace(/^\([^)]+\)\s*/g, '')
           .split(/[,;\/]/)
           .map((s) => s.trim().toLowerCase())
           .filter(Boolean);
@@ -131,7 +125,7 @@ export function TestArena({
           vocab: w,
           type: qType,
           prompt: w.hanzi,
-          subPrompt: qType === 'writing-vi' ? w.pinyin : w.amHanViet || undefined,
+          subPrompt: w.pinyin || undefined,
           expectedAnswers: synonyms,
         };
       }
@@ -181,7 +175,6 @@ export function TestArena({
         }
       }
     } else {
-      // Wrong match -> red flash + shake + record failed word
       setWrongPairIds([prevTile.id, clicked.id]);
       setSelectedTile(null);
       const wrongVocab = allWords.find((w) => w.id === prevTile.vocabId);
@@ -264,16 +257,16 @@ export function TestArena({
   // ── Setup Screen ──────────────────────────────────────────────────────
   if (!isStarted) {
     return (
-      <div className="max-w-md mx-auto py-12 px-4">
+      <div className="max-w-md mx-auto py-16 px-4 text-center">
         <button
           onClick={onExit}
-          className="inline-flex items-center gap-1.5 py-2 px-3.5 rounded-xl bg-white hover:bg-slate-200/70 text-slate-700 text-xs font-semibold shadow-2xs transition-colors mb-8"
+          className="inline-flex items-center gap-1.5 py-2 px-4 rounded-xl bg-white hover:bg-blue-50 text-slate-700 hover:text-blue-600 text-xs font-bold shadow-xs transition-colors mb-10 cursor-pointer"
         >
           <ArrowLeft size={14} /> Quay lại
         </button>
 
-        <div className="bg-white rounded-3xl p-6 shadow-xs space-y-6">
-          <h2 className="text-xl font-bold text-slate-900">Số từ kiểm tra</h2>
+        <div className="bg-white rounded-3xl p-7 shadow-xs space-y-6">
+          <h2 className="text-xl font-bold text-slate-800">Số lượng từ kiểm tra</h2>
 
           <div className="grid grid-cols-4 gap-2.5">
             {[
@@ -285,10 +278,10 @@ export function TestArena({
               <button
                 key={opt.value}
                 onClick={() => setTestSize(opt.value)}
-                className={`py-3 rounded-2xl text-sm font-bold transition-all ${
+                className={`py-3 rounded-2xl text-sm font-bold transition-all cursor-pointer ${
                   testSize === opt.value
-                    ? 'bg-blue-600 text-white shadow-xs'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'bg-slate-100 text-slate-700 hover:bg-blue-50 hover:text-blue-600'
                 }`}
               >
                 {opt.label}
@@ -298,9 +291,9 @@ export function TestArena({
 
           <button
             onClick={() => startTest()}
-            className="w-full py-3.5 bg-slate-900 hover:bg-slate-800 text-white font-semibold rounded-2xl text-sm transition-colors shadow-xs"
+            className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl text-sm transition-colors shadow-sm cursor-pointer"
           >
-            Bắt đầu kiểm tra
+            Bắt đầu
           </button>
         </div>
       </div>
@@ -317,26 +310,26 @@ export function TestArena({
         <div className="bg-white rounded-3xl p-8 shadow-xs">
           {isPassed ? (
             <div>
-              <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4 text-emerald-700">
+              <div className="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-4 text-emerald-600">
                 <Award size={32} />
               </div>
-              <h2 className="text-2xl font-bold text-slate-900 mb-2">Đạt 100%</h2>
+              <h2 className="text-2xl font-bold text-slate-800 mb-2">Đạt 100%</h2>
               <div className="text-sm font-semibold text-slate-600 mb-6">
                 {correctCount} / {questions.length} từ chính xác
               </div>
               <button
                 onClick={onExit}
-                className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white font-semibold rounded-2xl text-xs transition-colors"
+                className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl text-xs transition-colors cursor-pointer"
               >
                 Hoàn thành
               </button>
             </div>
           ) : (
             <div>
-              <div className="w-16 h-16 bg-rose-100 rounded-full flex items-center justify-center mx-auto mb-4 text-rose-600">
+              <div className="w-16 h-16 bg-rose-50 rounded-full flex items-center justify-center mx-auto mb-4 text-rose-600">
                 <ShieldAlert size={32} />
               </div>
-              <h2 className="text-2xl font-bold text-slate-900 mb-2">
+              <h2 className="text-2xl font-bold text-slate-800 mb-2">
                 {correctCount} / {questions.length} chính xác
               </h2>
               <div className="text-sm font-medium text-rose-600 mb-6">
@@ -346,13 +339,13 @@ export function TestArena({
               <div className="flex items-center justify-center gap-2.5">
                 <button
                   onClick={onExit}
-                  className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-2xl text-xs transition-colors"
+                  className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-2xl text-xs transition-colors cursor-pointer"
                 >
                   Quay lại
                 </button>
                 <button
                   onClick={() => startTest(failedVocabList)}
-                  className="flex-1 py-3 bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-2xl text-xs transition-colors shadow-xs flex items-center justify-center gap-1.5"
+                  className="flex-1 py-3 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-2xl text-xs transition-colors shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
                 >
                   <RotateCcw size={13} />
                   <span>Làm lại từ sai ({failedVocabList.length})</span>
@@ -372,17 +365,17 @@ export function TestArena({
         <div className="flex items-center justify-between pb-6">
           <button
             onClick={onExit}
-            className="inline-flex items-center gap-1.5 py-2 px-3.5 rounded-xl bg-white hover:bg-slate-200/70 text-slate-700 text-xs font-semibold shadow-2xs transition-colors"
+            className="inline-flex items-center gap-1.5 py-2 px-3.5 rounded-xl bg-white hover:bg-blue-50 text-slate-700 hover:text-blue-600 text-xs font-bold shadow-xs transition-colors cursor-pointer"
           >
             <ArrowLeft size={13} /> Thoát
           </button>
 
-          <div className="text-xs font-bold text-slate-700 bg-white py-1.5 px-3.5 rounded-xl shadow-2xs">
+          <div className="text-xs font-bold text-blue-600 bg-white py-1.5 px-3.5 rounded-xl shadow-2xs">
             Còn {matchPool.length} từ
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {matchBoard.map((tile) => {
             const isSelected = selectedTile === tile.id;
             const isWrong = wrongPairIds.includes(tile.id);
@@ -391,17 +384,17 @@ export function TestArena({
                 key={tile.id}
                 disabled={tile.matched}
                 onClick={() => handleTileClick(tile.id)}
-                className={`h-24 p-4 rounded-2xl text-center flex items-center justify-center ${
+                className={`h-28 p-3 rounded-2xl text-center flex items-center justify-center cursor-pointer ${
                   tile.matched
                     ? 'opacity-0 pointer-events-none scale-95 transition-all duration-150'
                     : isWrong
                     ? 'bg-rose-600 text-white shadow-md animate-shake'
                     : isSelected
-                    ? 'bg-slate-900 text-white shadow-md scale-[1.02] transition-transform duration-100'
-                    : 'bg-white hover:bg-slate-50 text-slate-900 shadow-xs transition-colors duration-100'
+                    ? 'bg-blue-600 text-white shadow-md scale-95 transition-transform duration-100'
+                    : 'bg-white hover:bg-blue-50/70 text-slate-800 shadow-xs transition-colors duration-100'
                 }`}
               >
-                <span className={tile.type === 'zh' ? 'text-2xl font-bold' : 'text-sm font-semibold'}>
+                <span className={tile.type === 'zh' ? 'text-2xl font-bold' : 'text-xs font-bold line-clamp-3'}>
                   {tile.text}
                 </span>
               </button>
@@ -422,12 +415,12 @@ export function TestArena({
       <div className="flex items-center justify-between pb-6">
         <button
           onClick={onExit}
-          className="inline-flex items-center gap-1.5 py-2 px-3.5 rounded-xl bg-white hover:bg-slate-200/70 text-slate-700 text-xs font-semibold shadow-2xs transition-colors"
+          className="inline-flex items-center gap-1.5 py-2 px-3.5 rounded-xl bg-white hover:bg-blue-50 text-slate-700 hover:text-blue-600 text-xs font-bold shadow-xs transition-colors cursor-pointer"
         >
           <ArrowLeft size={13} /> Thoát
         </button>
 
-        <div className="text-xs font-bold text-slate-700 bg-white py-1.5 px-3.5 rounded-xl shadow-2xs">
+        <div className="text-xs font-bold text-blue-600 bg-white py-1.5 px-3.5 rounded-xl shadow-2xs">
           {currentIndex + 1} / {questions.length}
         </div>
       </div>
@@ -435,7 +428,7 @@ export function TestArena({
       {/* Question Card */}
       <div className="py-12 px-6 bg-white rounded-3xl text-center shadow-sm">
         <div className="h-28 flex flex-col items-center justify-center">
-          <span className="text-4xl font-bold text-slate-900 tracking-tight">
+          <span className="text-4xl font-bold text-slate-800 tracking-tight">
             {currentQ.prompt}
           </span>
           {currentQ.subPrompt && (
@@ -458,13 +451,13 @@ export function TestArena({
               ? 'Gõ chữ Hán...'
               : 'Gõ nghĩa tiếng Việt...'
           }
-          className="w-full py-4 px-4 rounded-2xl text-base text-center bg-white shadow-xs text-slate-900 font-semibold focus:outline-none focus:ring-2 focus:ring-slate-900 transition-all"
+          className="w-full py-4 px-4 rounded-2xl text-base text-center bg-white shadow-xs text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-blue-600 transition-all"
         />
 
         <button
           type="submit"
           disabled={!userInput.trim()}
-          className="w-full py-3.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-30 text-white rounded-2xl text-xs font-semibold transition-all shadow-xs"
+          className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-30 text-white rounded-2xl text-xs font-bold transition-all shadow-sm cursor-pointer"
         >
           {currentIndex + 1 === questions.length ? 'Hoàn thành' : 'Tiếp theo'}
         </button>

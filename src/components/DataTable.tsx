@@ -258,7 +258,7 @@ function DraggableHeader({
   return (
     <th
       style={style}
-      className="py-3.5 px-4 text-left font-bold text-xs text-slate-700 uppercase tracking-wider bg-slate-200/75 select-none group first:rounded-tl-2xl last:rounded-tr-2xl"
+      className="py-3.5 px-4 text-left font-bold text-xs text-slate-600 uppercase tracking-wider bg-slate-100 select-none group first:rounded-tl-2xl last:rounded-tr-2xl"
     >
       <div className="flex items-center justify-between gap-1">
         <div className="flex items-center gap-1.5 flex-1 min-w-0">
@@ -464,7 +464,7 @@ export function DataTable<TData>({
                 value={globalFilter ?? ''}
                 onChange={(e) => setGlobalFilter(e.target.value)}
                 placeholder={searchPlaceholder}
-                className="w-full pl-9 pr-8 py-2 text-xs font-medium bg-white hover:bg-slate-50 focus:bg-white text-slate-900 rounded-xl shadow-xs transition-all focus:outline-none focus:ring-2 focus:ring-slate-900 placeholder:text-slate-400"
+                className="w-full pl-9 pr-8 py-2 text-xs font-medium bg-white hover:bg-slate-50 focus:bg-white text-slate-800 rounded-xl shadow-xs transition-all focus:outline-none focus:ring-2 focus:ring-blue-600 placeholder:text-slate-400"
               />
               {globalFilter && (
                 <button

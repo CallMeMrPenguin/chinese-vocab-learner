@@ -13,10 +13,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="vi">
-      <body className="min-h-screen bg-[#e6ebf2] text-slate-900 selection:bg-blue-100 selection:text-blue-900">
+      <body className="min-h-screen bg-[#eef2f6] text-slate-800 selection:bg-blue-100 selection:text-blue-900">
         <main>{children}</main>
       </body>
     </html>
   );
 }
-

@@ -38,12 +38,10 @@ export async function seedInitialDecks(): Promise<void> {
     try {
       const deckCount = await db.decks.count();
       const vocabCount = await db.vocab.count();
+      const seedVer = typeof window !== 'undefined' ? localStorage.getItem('vocab_seed_v3') : '1';
 
-      if (deckCount >= 2 && vocabCount >= 1500) {
-        const brokenCount = await db.vocab
-          .filter((w) => !w.meaningVi || w.meaningVi.trim() === '' || /^từ(\/|\s)/i.test(w.meaningVi.trim()))
-          .count();
-        if (brokenCount === 0) return;
+      if (deckCount >= 2 && vocabCount >= 1500 && seedVer === '1') {
+        return;
       }
 
       // 1. Seed HSK 3
@@ -88,6 +86,10 @@ export async function seedInitialDecks(): Promise<void> {
         }
         const itemsWithDeck4 = hsk4Words.map((w) => ({ ...w, deckId: 'deck_hsk4' }));
         await db.vocab.bulkPut(itemsWithDeck4);
+      }
+
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('vocab_seed_v3', '1');
       }
     } catch (err) {
       console.error('Error seeding initial decks:', err);

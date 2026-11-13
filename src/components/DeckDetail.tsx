@@ -73,7 +73,7 @@ export function DeckDetail({
         accessorKey: 'hanzi',
         header: 'Chữ Hán',
         cell: (info) => (
-          <span className="text-base font-bold text-slate-900">{info.getValue<string>()}</span>
+          <span className="text-base font-bold text-slate-800">{info.getValue<string>()}</span>
         ),
       },
       {
@@ -84,7 +84,7 @@ export function DeckDetail({
       {
         accessorKey: 'amHanViet',
         header: 'Hán Việt',
-        cell: (info) => <span className="text-slate-700 font-medium">{info.getValue<string>() || '—'}</span>,
+        cell: (info) => <span className="text-slate-600 font-medium">{info.getValue<string>() || '—'}</span>,
       },
       {
         accessorKey: 'pos',
@@ -96,7 +96,7 @@ export function DeckDetail({
       {
         accessorKey: 'meaningVi',
         header: 'Nghĩa tiếng Việt',
-        cell: (info) => <span className="text-slate-900 line-clamp-2">{info.getValue<string>()}</span>,
+        cell: (info) => <span className="text-slate-800 line-clamp-2">{info.getValue<string>()}</span>,
       },
       {
         accessorKey: 'isMastered',
@@ -110,20 +110,20 @@ export function DeckDetail({
             (item.writingViStep || 0) > 0;
           if (item.isMastered) {
             return (
-              <span className="py-1 px-2.5 bg-emerald-100 text-emerald-800 rounded-lg font-bold text-xs inline-block">
+              <span className="py-1 px-2.5 bg-emerald-50 text-emerald-700 rounded-lg font-bold text-xs inline-block">
                 Đã thuộc
               </span>
             );
           }
           if (practiced) {
             return (
-              <span className="py-1 px-2.5 bg-blue-100 text-blue-800 rounded-lg font-semibold text-xs inline-block">
+              <span className="py-1 px-2.5 bg-blue-50 text-blue-700 rounded-lg font-semibold text-xs inline-block">
                 Đang học
               </span>
             );
           }
           return (
-            <span className="py-1 px-2.5 bg-slate-200/80 text-slate-600 rounded-lg font-medium text-xs inline-block">
+            <span className="py-1 px-2.5 bg-slate-100 text-slate-500 rounded-lg font-medium text-xs inline-block">
               Chưa học
             </span>
           );
@@ -141,17 +141,17 @@ export function DeckDetail({
           <button
             type="button"
             onClick={onBack}
-            className="inline-flex items-center gap-1.5 py-2 px-3.5 rounded-xl bg-white hover:bg-slate-200/70 text-slate-800 text-xs font-semibold shadow-xs transition-colors mb-4 cursor-pointer"
+            className="inline-flex items-center gap-1.5 py-2 px-3.5 rounded-xl bg-white hover:bg-blue-50 text-slate-700 hover:text-blue-600 text-xs font-semibold shadow-xs transition-colors mb-4 cursor-pointer"
           >
             <ArrowLeft size={14} /> Tất cả bộ từ
           </button>
 
           <div className="flex items-center gap-2.5">
-            <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">{deck.title}</h1>
+            <h1 className="text-3xl font-extrabold text-slate-800 tracking-tight">{deck.title}</h1>
             <button
               type="button"
               onClick={() => setShowEditDeckModal(true)}
-              className="p-2 rounded-xl text-slate-600 hover:text-slate-950 bg-white hover:bg-slate-200/70 shadow-xs transition-colors cursor-pointer"
+              className="p-2 rounded-xl text-slate-500 hover:text-blue-600 bg-white hover:bg-blue-50 shadow-xs transition-colors cursor-pointer"
               title="Chỉnh sửa"
             >
               <Edit3 size={15} />
@@ -160,16 +160,16 @@ export function DeckDetail({
 
           <div className="flex items-center gap-2 mt-2.5 text-xs font-semibold text-slate-600">
             {deck.hskLevel && (
-              <span className="py-1 px-2.5 bg-slate-200 text-slate-800 rounded-lg">
+              <span className="py-1 px-2.5 bg-blue-50 text-blue-700 rounded-lg font-bold">
                 {deck.hskLevel}
               </span>
             )}
             {deck.topic && (
-              <span className="py-1 px-2.5 bg-slate-200 text-slate-800 rounded-lg">
+              <span className="py-1 px-2.5 bg-white text-slate-600 rounded-lg shadow-2xs">
                 {deck.topic}
               </span>
             )}
-            <span className="text-slate-400">|</span>
+            <span className="text-slate-300">|</span>
             <span>{vocabList.length} từ</span>
           </div>
         </div>
@@ -179,7 +179,7 @@ export function DeckDetail({
           <button
             type="button"
             onClick={() => setShowImportModal(true)}
-            className="py-2.5 px-4 bg-white hover:bg-slate-200/70 text-slate-800 text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+            className="py-2.5 px-4 bg-white hover:bg-blue-50 text-slate-700 hover:text-blue-600 text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
           >
             <Plus size={15} />
             <span>Nhập</span>
@@ -208,8 +208,8 @@ export function DeckDetail({
             }
             className={`py-4 px-6 rounded-2xl text-base font-bold transition-all cursor-pointer shadow-xs ${
               selectedMainTrack === 'practice'
-                ? 'bg-slate-900 text-white shadow-md'
-                : 'bg-white hover:bg-slate-200/70 text-slate-900'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'bg-white hover:bg-blue-50/70 text-slate-700 hover:text-blue-600'
             }`}
           >
             Luyện tập
@@ -222,8 +222,8 @@ export function DeckDetail({
             }
             className={`py-4 px-6 rounded-2xl text-base font-bold transition-all cursor-pointer shadow-xs ${
               selectedMainTrack === 'test'
-                ? 'bg-blue-600 text-white shadow-md'
-                : 'bg-white hover:bg-slate-200/70 text-slate-900'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'bg-white hover:bg-blue-50/70 text-slate-700 hover:text-blue-600'
             }`}
           >
             Kiểm tra
@@ -236,69 +236,62 @@ export function DeckDetail({
             <button
               type="button"
               onClick={() => onStartPractice('flashcard')}
-              className="py-3.5 px-4 bg-slate-800 hover:bg-slate-950 text-white rounded-xl text-sm font-bold text-center transition-colors shadow-xs cursor-pointer"
+              className="py-3.5 px-4 bg-white hover:bg-blue-600 text-slate-700 hover:text-white rounded-xl text-sm font-bold text-center transition-colors shadow-xs cursor-pointer"
             >
               Lật thẻ
             </button>
             <button
               type="button"
               onClick={() => onStartPractice('matching')}
-              className="py-3.5 px-4 bg-slate-800 hover:bg-slate-950 text-white rounded-xl text-sm font-bold text-center transition-colors shadow-xs cursor-pointer"
+              className="py-3.5 px-4 bg-white hover:bg-blue-600 text-slate-700 hover:text-white rounded-xl text-sm font-bold text-center transition-colors shadow-xs cursor-pointer"
             >
               Ghép thẻ
             </button>
             <button
               type="button"
               onClick={() => onStartPractice('writing-zh')}
-              className="py-3.5 px-4 bg-slate-800 hover:bg-slate-950 text-white rounded-xl text-sm font-bold text-center transition-colors shadow-xs cursor-pointer"
+              className="py-3.5 px-4 bg-white hover:bg-blue-600 text-slate-700 hover:text-white rounded-xl text-sm font-bold text-center transition-colors shadow-xs cursor-pointer"
             >
               Gõ chữ Hán
             </button>
             <button
               type="button"
               onClick={() => onStartPractice('writing-vi')}
-              className="py-3.5 px-4 bg-slate-800 hover:bg-slate-950 text-white rounded-xl text-sm font-bold text-center transition-colors shadow-xs cursor-pointer"
+              className="py-3.5 px-4 bg-white hover:bg-blue-600 text-slate-700 hover:text-white rounded-xl text-sm font-bold text-center transition-colors shadow-xs cursor-pointer"
             >
               Gõ tiếng Việt
             </button>
           </div>
         )}
 
-        {/* Sub-mode Selection when Kiểm tra is clicked */}
+        {/* Sub-mode Selection when Kiểm tra is clicked (No Flashcard in Test Mode) */}
         {selectedMainTrack === 'test' && (
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-1">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
             <button
               type="button"
               onClick={() => onStartTest('mix')}
-              className="py-3.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold text-center transition-colors shadow-xs cursor-pointer"
+              className="py-3.5 px-4 bg-white hover:bg-blue-600 text-blue-600 hover:text-white rounded-xl text-sm font-bold text-center transition-colors shadow-xs cursor-pointer"
             >
               Hỗn hợp
             </button>
             <button
               type="button"
-              onClick={() => onStartTest('flashcard')}
-              className="py-3.5 px-4 bg-slate-800 hover:bg-slate-950 text-white rounded-xl text-sm font-bold text-center transition-colors shadow-xs cursor-pointer"
-            >
-              Lật thẻ
-            </button>
-            <button
-              type="button"
               onClick={() => onStartTest('matching')}
-              className="py-3.5 px-4 bg-slate-800 hover:bg-slate-950 text-white rounded-xl text-sm font-bold text-center transition-colors shadow-xs cursor-pointer"
+              className="py-3.5 px-4 bg-white hover:bg-blue-600 text-slate-700 hover:text-white rounded-xl text-sm font-bold text-center transition-colors shadow-xs cursor-pointer"
             >
               Ghép thẻ
             </button>
             <button
               type="button"
               onClick={() => onStartTest('writing-zh')}
-              className="py-3.5 px-4 bg-slate-800 hover:bg-slate-950 text-white rounded-xl text-sm font-bold text-center transition-colors shadow-xs cursor-pointer"
+              className="py-3.5 px-4 bg-white hover:bg-blue-600 text-slate-700 hover:text-white rounded-xl text-sm font-bold text-center transition-colors shadow-xs cursor-pointer"
             >
               Gõ chữ Hán
             </button>
             <button
               type="button"
               onClick={() => onStartTest('writing-vi')}
-              className="py-3.5 px-4 bg-slate-800 hover:bg-slate-950 text-white rounded-xl text-sm font-bold text-center transition-colors shadow-xs cursor-pointer"
+              className="py-3.5 px-4 bg-white hover:bg-blue-600 text-slate-700 hover:text-white rounded-xl text-sm font-bold text-center transition-colors shadow-xs cursor-pointer"
             >
               Gõ tiếng Việt
             </button>
@@ -326,26 +319,26 @@ export function DeckDetail({
 
       {/* ── Edit Deck Modal ────────────────────────────────────────── */}
       {showEditDeckModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md bg-white rounded-3xl p-6 shadow-2xl relative">
-            <h2 className="text-lg font-bold text-slate-900 pb-3">
+            <h2 className="text-lg font-bold text-slate-800 pb-3">
               Chỉnh sửa bộ từ
             </h2>
 
             <form onSubmit={handleSaveDeck} className="space-y-4 pt-2">
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">Tên bộ từ</label>
+                <label className="block text-xs font-bold text-slate-600 mb-1.5">Tên bộ từ</label>
                 <input
                   type="text"
                   required
                   value={editTitle}
                   onChange={(e) => setEditTitle(e.target.value)}
-                  className="w-full px-3.5 py-2.5 text-xs font-medium bg-slate-100 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                  className="w-full px-3.5 py-2.5 text-xs font-medium bg-slate-100 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-600"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">Cấp độ</label>
+                <label className="block text-xs font-bold text-slate-600 mb-1.5">Cấp độ</label>
                 <div className="flex flex-wrap gap-1.5">
                   {['Tự do', 'HSK 1', 'HSK 2', 'HSK 3', 'HSK 4', 'HSK 5', 'HSK 6'].map((lvl) => (
                     <button
@@ -354,8 +347,8 @@ export function DeckDetail({
                       onClick={() => setEditHsk(lvl)}
                       className={`py-1.5 px-3 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
                         editHsk === lvl
-                          ? 'bg-slate-900 text-white'
-                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                       }`}
                     >
                       {lvl}
@@ -365,13 +358,13 @@ export function DeckDetail({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">Chủ đề</label>
+                <label className="block text-xs font-bold text-slate-600 mb-1.5">Chủ đề</label>
                 <input
                   type="text"
                   value={editTopic}
                   onChange={(e) => setEditTopic(e.target.value)}
                   placeholder="Du lịch, Ẩm thực..."
-                  className="w-full px-3.5 py-2.5 text-xs font-medium bg-slate-100 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                  className="w-full px-3.5 py-2.5 text-xs font-medium bg-slate-100 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-600"
                 />
               </div>
 
@@ -394,7 +387,7 @@ export function DeckDetail({
                   </button>
                   <button
                     type="submit"
-                    className="py-2 px-5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                    className="py-2 px-5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
                   >
                     Lưu
                   </button>
@@ -405,12 +398,12 @@ export function DeckDetail({
             {showDeleteConfirm && (
               <div className="absolute inset-0 bg-white rounded-3xl p-6 flex flex-col items-center justify-center text-center">
                 <AlertTriangle size={32} className="text-rose-600 mb-3" />
-                <h3 className="text-base font-bold text-slate-900 mb-6">Xác nhận xóa bộ từ này?</h3>
+                <h3 className="text-base font-bold text-slate-800 mb-6">Xác nhận xóa bộ từ này?</h3>
                 <div className="flex items-center gap-2.5">
                   <button
                     type="button"
                     onClick={() => setShowDeleteConfirm(false)}
-                    className="py-2.5 px-5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl cursor-pointer"
+                    className="py-2.5 px-5 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl cursor-pointer"
                   >
                     Hủy
                   </button>

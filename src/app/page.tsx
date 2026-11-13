@@ -158,13 +158,13 @@ export default function Home() {
     <div className="w-full max-w-6xl mx-auto py-10 px-4 sm:px-6 space-y-8">
       {/* ── Header ─────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between gap-4">
-        <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
+        <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight">
           Bộ từ vựng
         </h1>
 
         <button
           onClick={() => setShowCreateModal(true)}
-          className="py-2.5 px-4 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold transition-all shadow-xs flex items-center justify-center gap-1.5"
+          className="py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
         >
           <Plus size={15} />
           <span>Tạo bộ từ</span>
@@ -190,25 +190,25 @@ export default function Home() {
               <div>
                 <div className="flex items-center gap-1.5 mb-3 flex-wrap">
                   {deck.hskLevel && (
-                    <span className="py-1 px-2.5 bg-slate-900 text-white text-[11px] font-semibold rounded-lg">
+                    <span className="py-1 px-2.5 bg-blue-50 text-blue-700 text-[11px] font-bold rounded-lg">
                       {deck.hskLevel}
                     </span>
                   )}
                   {deck.topic && (
-                    <span className="py-1 px-2.5 bg-slate-100 text-slate-700 text-[11px] font-semibold rounded-lg">
+                    <span className="py-1 px-2.5 bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg">
                       {deck.topic}
                     </span>
                   )}
                 </div>
 
-                <h2 className="text-lg font-bold text-slate-900 group-hover:text-blue-600 transition-colors">
+                <h2 className="text-lg font-bold text-slate-800 group-hover:text-blue-600 transition-colors">
                   {deck.title}
                 </h2>
               </div>
 
-              <div className="pt-4 flex items-center justify-between text-xs font-semibold text-slate-600">
+              <div className="pt-4 flex items-center justify-between text-xs font-semibold text-slate-500">
                 <div>
-                  <span className="text-slate-900 font-bold">{deck.totalWords}</span> từ
+                  <span className="text-slate-800 font-bold">{deck.totalWords}</span> từ
                   {deck.masteredWords > 0 && (
                     <span className="text-emerald-600 ml-2">
                       | {deck.masteredWords} đã thuộc
@@ -216,7 +216,7 @@ export default function Home() {
                   )}
                 </div>
 
-                <div className="flex items-center gap-1 text-slate-500 group-hover:text-blue-600 transition-colors">
+                <div className="flex items-center gap-1 text-slate-400 group-hover:text-blue-600 transition-colors">
                   <span>Mở</span>
                   <ChevronRight size={14} />
                 </div>
@@ -228,15 +228,15 @@ export default function Home() {
 
       {/* ── Modal Create Deck ───────────────────────────────────────── */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md bg-white rounded-3xl p-6 shadow-2xl relative">
-            <h2 className="text-lg font-bold text-slate-900 pb-3">
+            <h2 className="text-lg font-bold text-slate-800 pb-3">
               Tạo bộ từ mới
             </h2>
 
             <form onSubmit={handleCreateDeck} className="space-y-4 pt-2">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Tên bộ từ</label>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Tên bộ từ</label>
                 <input
                   type="text"
                   required
@@ -244,22 +244,22 @@ export default function Home() {
                   placeholder="Từ vựng giao tiếp..."
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
-                  className="w-full px-3.5 py-2.5 text-xs bg-slate-100 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                  className="w-full px-3.5 py-2.5 text-xs bg-slate-100 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-600"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Cấp độ</label>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5">Cấp độ</label>
                 <div className="flex flex-wrap gap-1.5">
                   {['Tự do', 'HSK 1', 'HSK 2', 'HSK 3', 'HSK 4', 'HSK 5', 'HSK 6'].map((lvl) => (
                     <button
                       key={lvl}
                       type="button"
                       onClick={() => setNewHsk(lvl)}
-                      className={`py-1.5 px-3 rounded-lg text-xs font-semibold transition-colors ${
+                      className={`py-1.5 px-3 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
                         newHsk === lvl
-                          ? 'bg-slate-900 text-white'
-                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                       }`}
                     >
                       {lvl}
@@ -269,13 +269,13 @@ export default function Home() {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Chủ đề</label>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Chủ đề</label>
                 <input
                   type="text"
                   placeholder="Du lịch, Công sở..."
                   value={newTopic}
                   onChange={(e) => setNewTopic(e.target.value)}
-                  className="w-full px-3.5 py-2.5 text-xs bg-slate-100 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                  className="w-full px-3.5 py-2.5 text-xs bg-slate-100 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-600"
                 />
               </div>
 
@@ -283,14 +283,14 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
-                  className="py-2.5 px-4 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100"
+                  className="py-2.5 px-4 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
                   disabled={!newTitle.trim()}
-                  className="py-2.5 px-5 bg-slate-900 hover:bg-slate-800 disabled:opacity-30 text-white rounded-xl text-xs font-semibold transition-colors shadow-xs"
+                  className="py-2.5 px-5 bg-blue-600 hover:bg-blue-700 disabled:opacity-30 text-white rounded-xl text-xs font-semibold transition-colors shadow-xs cursor-pointer"
                 >
                   Tạo bộ từ
                 </button>

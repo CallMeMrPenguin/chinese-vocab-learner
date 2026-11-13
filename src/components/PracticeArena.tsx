@@ -36,6 +36,7 @@ export function PracticeArena({
   // Flashcard state
   const [isFlipped, setIsFlipped] = useState<boolean>(false);
   const [canClickActions, setCanClickActions] = useState<boolean>(false);
+  const [cardTransitionEnabled, setCardTransitionEnabled] = useState<boolean>(true);
 
   // Writing state
   const [typedInput, setTypedInput] = useState<string>('');
@@ -61,22 +62,18 @@ export function PracticeArena({
       return w.writingViStep || 0;
     };
 
-    // 1. Previously wrong words (Leech or lapseCount > 0)
     const wrongPool = allWords
       .filter((w) => w.isLeech || (w.lapseCount || 0) > 0)
       .sort(() => Math.random() - 0.5);
 
-    // 2. Old previously practiced words
     const oldPool = allWords
       .filter((w) => !w.isLeech && (w.lapseCount || 0) === 0 && getStep(w) > 0)
       .sort(() => Math.random() - 0.5);
 
-    // 3. Unpracticed new words
     const newPool = allWords
       .filter((w) => !w.isLeech && (w.lapseCount || 0) === 0 && getStep(w) === 0)
       .sort(() => Math.random() - 0.5);
 
-    // Take a chance-based mix of wrong words + old words (up to ~30% of sessionSize)
     const reviewQuota = Math.floor(sessionSize * 0.35);
     const chosenReview: VocabItem[] = [];
 
@@ -152,10 +149,16 @@ export function PracticeArena({
   }, [isFlipped]);
 
   useEffect(() => {
+    // Instantly reset card to front without showing reverse animation of next card's back
+    setCardTransitionEnabled(false);
     setIsFlipped(false);
     setHintShown(false);
     setTypedInput('');
     setWriteFeedback('idle');
+    const raf = requestAnimationFrame(() => {
+      setCardTransitionEnabled(true);
+    });
+    return () => cancelAnimationFrame(raf);
   }, [currentItem?.id, queue.length]);
 
   // ── Flashcard: Right (Done in this run) vs Wrong (Shows up later) ─────
@@ -219,6 +222,7 @@ export function PracticeArena({
       isCorrect = userText === currentItem.hanzi.toLowerCase();
     } else {
       const synonyms = currentItem.meaningVi
+        .replace(/^\([^)]+\)\s*/g, '')
         .split(/[,;\/]/)
         .map((s) => s.trim().toLowerCase())
         .filter(Boolean);
@@ -292,7 +296,6 @@ export function PracticeArena({
       return;
     }
 
-    // Check if valid pair
     if (selectedTile.wordId === tile.wordId && selectedTile.type !== tile.type) {
       const updatedTiles = matchingTiles.map((t) =>
         t.wordId === tile.wordId ? { ...t, isMatched: true } : t
@@ -300,7 +303,6 @@ export function PracticeArena({
       setMatchingTiles(updatedTiles);
       setSelectedTile(null);
 
-      // Check if current 4-pair board is finished
       if (updatedTiles.every((t) => t.isMatched)) {
         const boardWords = queue.slice(0, 4);
         const passedWords: VocabItem[] = [];
@@ -332,7 +334,6 @@ export function PracticeArena({
         setupMatchingMicroBoard(remaining.slice(0, 4));
       }
     } else {
-      // WRONG MATCH -> Turn both tiles red fast and shake!
       const pairIds = [selectedTile.id, tile.id];
       setWrongTileIds(pairIds);
 
@@ -341,7 +342,6 @@ export function PracticeArena({
       nextFailed.add(tile.wordId);
       setFailedInBoardIds(nextFailed);
 
-      // Record lapse in DB for the wrong word
       const wrongWord = queue.find((w) => w.id === selectedTile.wordId);
       if (wrongWord) {
         const nextLapse = (wrongWord.lapseCount || 0) + 1;
@@ -367,42 +367,44 @@ export function PracticeArena({
         <button
           type="button"
           onClick={onExit}
-          className="inline-flex items-center gap-1.5 py-2 px-4 rounded-xl bg-white hover:bg-slate-200/70 text-slate-800 text-xs font-bold shadow-xs mb-10 transition-colors cursor-pointer"
+          className="inline-flex items-center gap-1.5 py-2 px-4 rounded-xl bg-white hover:bg-blue-50 text-slate-700 hover:text-blue-600 text-xs font-bold shadow-xs mb-10 transition-colors cursor-pointer"
         >
           <ArrowLeft size={14} /> Quay lại
         </button>
 
-        <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight mb-6">
-          Số lượng từ
-        </h1>
+        <div className="bg-white rounded-3xl p-7 shadow-xs">
+          <h1 className="text-xl font-bold text-slate-800 tracking-tight mb-6">
+            Số lượng từ
+          </h1>
 
-        <div className="flex items-center justify-center gap-2.5 mb-8 flex-wrap">
-          {[10, 15, 20, 25, 30]
-            .filter((n) => n <= maxAvailable || n === 10)
-            .map((num) => (
-              <button
-                key={num}
-                type="button"
-                onClick={() => setSessionSize(num)}
-                className={`py-3 px-6 rounded-2xl text-sm font-bold transition-all cursor-pointer shadow-xs ${
-                  sessionSize === num
-                    ? 'bg-slate-900 text-white shadow-md'
-                    : 'bg-white text-slate-800 hover:bg-slate-200/70'
-                }`}
-              >
-                {num}
-              </button>
-            ))}
+          <div className="flex items-center justify-center gap-2.5 mb-7 flex-wrap">
+            {[10, 15, 20, 25, 30]
+              .filter((n) => n <= maxAvailable || n === 10)
+              .map((num) => (
+                <button
+                  key={num}
+                  type="button"
+                  onClick={() => setSessionSize(num)}
+                  className={`py-3 px-5 rounded-2xl text-sm font-bold transition-all cursor-pointer ${
+                    sessionSize === num
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'bg-slate-100 text-slate-700 hover:bg-blue-50 hover:text-blue-600'
+                  }`}
+                >
+                  {num}
+                </button>
+              ))}
+          </div>
+
+          <button
+            type="button"
+            onClick={initializeQueue}
+            disabled={allWords.length === 0}
+            className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-30 text-white text-sm font-bold rounded-2xl transition-all shadow-sm cursor-pointer"
+          >
+            Bắt đầu
+          </button>
         </div>
-
-        <button
-          type="button"
-          onClick={initializeQueue}
-          disabled={allWords.length === 0}
-          className="w-full py-4 bg-blue-600 hover:bg-blue-700 disabled:opacity-30 text-white text-sm font-bold rounded-2xl transition-all shadow-md cursor-pointer"
-        >
-          Bắt đầu
-        </button>
       </div>
     );
   }
@@ -420,14 +422,14 @@ export function PracticeArena({
         <button
           type="button"
           onClick={onExit}
-          className="inline-flex items-center gap-1.5 py-2 px-3.5 rounded-xl bg-white hover:bg-slate-200/70 text-slate-800 text-xs font-bold shadow-xs transition-colors cursor-pointer"
+          className="inline-flex items-center gap-1.5 py-2 px-3.5 rounded-xl bg-white hover:bg-blue-50 text-slate-700 hover:text-blue-600 text-xs font-bold shadow-xs transition-colors cursor-pointer"
         >
           <ArrowLeft size={14} /> Thoát
         </button>
 
-        <div className="flex items-center gap-2 text-xs font-bold text-slate-800">
+        <div className="flex items-center gap-2 text-xs font-bold text-slate-700 bg-white py-1.5 px-3.5 rounded-xl shadow-2xs">
           <span>{deckTitle}</span>
-          <span className="text-slate-400">|</span>
+          <span className="text-slate-300">|</span>
           <span className="text-blue-600">
             {completedWordIds.size} / {totalSessionTarget}
           </span>
@@ -435,29 +437,38 @@ export function PracticeArena({
       </div>
 
       {/* Progress Bar */}
-      <div className="w-full h-2 bg-slate-200 rounded-full mb-8 overflow-hidden">
+      <div className="w-full h-2 bg-white rounded-full mb-8 overflow-hidden shadow-2xs">
         <div
           className="h-full bg-blue-600 transition-all duration-300 rounded-full"
           style={{ width: `${progressPercent}%` }}
         />
       </div>
 
-      {/* ── MODE 1: Flashcard ────────────────────────────────────────── */}
+      {/* ── MODE 1: Flashcard with 3D Flip Animation ─────────────────── */}
       {mode === 'flashcard' && currentItem && (
         <div className="flex-1 flex flex-col items-center justify-between py-2">
           <div
             onClick={() => setIsFlipped(!isFlipped)}
-            className="w-full max-w-md py-14 px-6 bg-white hover:bg-slate-50 rounded-3xl shadow-sm cursor-pointer select-none text-center transition-all flex flex-col items-center justify-center min-h-[260px]"
+            className="w-full max-w-md h-72 flip-card-perspective cursor-pointer select-none"
           >
-            <div className="h-28 flex items-center justify-center">
-              <span className="text-6xl font-bold text-slate-900 tracking-tight">
-                {currentItem.hanzi}
-              </span>
-            </div>
+            <div
+              className={`flip-card-inner ${isFlipped ? 'is-flipped' : ''}`}
+              style={!cardTransitionEnabled ? { transition: 'none' } : undefined}
+            >
+              {/* Front Face */}
+              <div className="flip-card-face bg-white hover:bg-slate-50/60 rounded-3xl shadow-sm p-8 flex flex-col items-center justify-center text-center">
+                <span className="text-6xl font-bold text-slate-800 tracking-tight">
+                  {currentItem.hanzi}
+                </span>
+              </div>
 
-            {isFlipped && (
-              <div className="space-y-2 mt-4">
-                <div className="text-sm font-semibold text-slate-600">
+              {/* Back Face */}
+              <div className="flip-card-face flip-card-back bg-white rounded-3xl shadow-sm p-8 flex flex-col items-center justify-center text-center">
+                <span className="text-4xl font-bold text-slate-800 tracking-tight mb-4">
+                  {currentItem.hanzi}
+                </span>
+
+                <div className="text-sm font-semibold text-blue-600 mb-3">
                   <span>{currentItem.pinyin}</span>
                   {currentItem.amHanViet && (
                     <>
@@ -468,15 +479,16 @@ export function PracticeArena({
                   {currentItem.pos && (
                     <>
                       <span className="text-slate-300 mx-2">|</span>
-                      <span>{currentItem.pos}</span>
+                      <span className="text-slate-500">{currentItem.pos}</span>
                     </>
                   )}
                 </div>
-                <div className="text-base font-bold text-slate-900 pt-1">
+
+                <div className="text-lg font-bold text-slate-800">
                   {currentItem.meaningVi}
                 </div>
               </div>
-            )}
+            </div>
           </div>
 
           <div className="w-full max-w-md grid grid-cols-2 gap-3 mt-8">
@@ -484,7 +496,7 @@ export function PracticeArena({
               type="button"
               disabled={!isFlipped || !canClickActions}
               onClick={handleFlashcardWrong}
-              className="py-3.5 px-4 bg-white hover:bg-rose-600 hover:text-white disabled:opacity-30 rounded-2xl text-sm font-bold text-slate-800 shadow-xs transition-colors cursor-pointer"
+              className="py-3.5 px-4 bg-white hover:bg-rose-50 disabled:opacity-30 rounded-2xl text-sm font-bold text-rose-600 shadow-xs transition-colors cursor-pointer"
             >
               Chưa thuộc
             </button>
@@ -492,7 +504,7 @@ export function PracticeArena({
               type="button"
               disabled={!isFlipped || !canClickActions}
               onClick={handleFlashcardRight}
-              className="py-3.5 px-4 bg-slate-900 hover:bg-slate-800 disabled:opacity-30 rounded-2xl text-sm font-bold text-white shadow-sm transition-colors cursor-pointer"
+              className="py-3.5 px-4 bg-blue-600 hover:bg-blue-700 disabled:opacity-30 rounded-2xl text-sm font-bold text-white shadow-sm transition-colors cursor-pointer"
             >
               Đã thuộc
             </button>
@@ -521,7 +533,7 @@ export function PracticeArena({
                       ? 'bg-rose-600 text-white shadow-lg animate-shake'
                       : isSelected
                       ? 'bg-blue-600 text-white shadow-md scale-95 transition-transform duration-100'
-                      : 'bg-white hover:bg-slate-200/70 text-slate-900 shadow-xs transition-colors duration-100'
+                      : 'bg-white hover:bg-blue-50/70 text-slate-800 shadow-xs transition-colors duration-100'
                   }`}
                 >
                   <span className={tile.type === 'hz' ? 'text-2xl font-bold' : 'line-clamp-3'}>
@@ -539,13 +551,13 @@ export function PracticeArena({
         <div className="flex-1 flex flex-col items-center justify-between py-2">
           <div className="w-full max-w-md py-12 px-6 bg-white rounded-3xl shadow-sm text-center">
             <div className="h-28 flex flex-col items-center justify-center">
-              <span className="text-4xl font-bold text-slate-900 tracking-tight">
+              <span className="text-4xl font-bold text-slate-800 tracking-tight">
                 {mode === 'writing-zh'
-                  ? currentItem.meaningVi.split(/[,;\/]/)[0].trim()
+                  ? currentItem.meaningVi.replace(/^\([^)]+\)\s*/g, '').split(/[,;\/]/)[0].trim()
                   : currentItem.hanzi}
               </span>
               {mode === 'writing-zh' && currentItem.amHanViet && (
-                <div className="text-sm text-slate-500 mt-2 font-semibold">
+                <div className="text-sm text-blue-600 mt-2 font-semibold">
                   {currentItem.amHanViet}
                 </div>
               )}
@@ -567,11 +579,11 @@ export function PracticeArena({
               value={typedInput}
               onChange={(e) => setTypedInput(e.target.value)}
               placeholder={mode === 'writing-zh' ? 'Gõ chữ Hán...' : 'Gõ nghĩa tiếng Việt...'}
-              className={`w-full py-4 px-4 rounded-2xl text-sm font-semibold text-center bg-white text-slate-900 shadow-xs transition-all focus:outline-none focus:ring-2 focus:ring-slate-900 ${
+              className={`w-full py-4 px-4 rounded-2xl text-sm font-semibold text-center bg-white text-slate-800 shadow-xs transition-all focus:outline-none focus:ring-2 focus:ring-blue-600 ${
                 writeFeedback === 'correct'
-                  ? 'ring-2 ring-emerald-500 bg-emerald-50 text-emerald-900'
+                  ? 'ring-2 ring-emerald-500 bg-emerald-50 text-emerald-800'
                   : writeFeedback === 'wrong'
-                  ? 'ring-2 ring-rose-500 bg-rose-50 text-rose-900 animate-shake'
+                  ? 'ring-2 ring-rose-500 bg-rose-50 text-rose-800 animate-shake'
                   : ''
               }`}
             />
@@ -580,14 +592,14 @@ export function PracticeArena({
               <button
                 type="button"
                 onClick={() => setHintShown(true)}
-                className="py-3.5 px-5 bg-white hover:bg-slate-200/70 text-slate-800 rounded-2xl text-xs font-bold shadow-xs transition-colors cursor-pointer"
+                className="py-3.5 px-5 bg-white hover:bg-blue-50 text-slate-700 hover:text-blue-600 rounded-2xl text-xs font-bold shadow-xs transition-colors cursor-pointer"
               >
                 Gợi ý
               </button>
               <button
                 type="submit"
                 disabled={!typedInput.trim()}
-                className="flex-1 py-3.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-30 text-white rounded-2xl text-xs font-bold transition-colors shadow-sm cursor-pointer"
+                className="flex-1 py-3.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-30 text-white rounded-2xl text-xs font-bold transition-colors shadow-sm cursor-pointer"
               >
                 Xác nhận
               </button>
