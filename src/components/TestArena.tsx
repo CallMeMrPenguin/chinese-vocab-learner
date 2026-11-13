@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Check, X, ShieldAlert, Award, RotateCcw } from 'lucide-react';
+import React, { useState } from 'react';
+import { ArrowLeft, Award, ShieldAlert, RotateCcw } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { VocabItem, TestModeType } from '@/lib/types';
 import { db } from '@/lib/db';
@@ -25,26 +25,78 @@ interface TestQuestion {
 
 export function TestArena({
   deckId,
-  deckTitle,
   allWords,
   testMode,
   onExit,
   onSuccess,
 }: TestArenaProps) {
+  const [testSize, setTestSize] = useState<number>(20);
+  const [isStarted, setIsStarted] = useState<boolean>(false);
+
   const [questions, setQuestions] = useState<TestQuestion[]>([]);
   const [currentIndex, setCurrentIndex] = useState<number>(0);
   const [userInput, setUserInput] = useState<string>('');
   const [failedVocabList, setFailedVocabList] = useState<VocabItem[]>([]);
   const [isTestFinished, setIsTestFinished] = useState<boolean>(false);
-  const [isRemediationMode, setIsRemediationMode] = useState<boolean>(false);
 
-  // Initialize Questions
-  useEffect(() => {
-    generateQuestions(allWords);
-  }, [allWords, testMode]);
+  // Matching test state
+  const [matchPool, setMatchPool] = useState<VocabItem[]>([]);
+  const [matchBoard, setMatchBoard] = useState<
+    Array<{ id: string; vocabId: string; text: string; type: 'zh' | 'vi'; matched: boolean }>
+  >([]);
+  const [selectedTile, setSelectedTile] = useState<string | null>(null);
+  const [wrongPairIds, setWrongPairIds] = useState<string[]>([]);
 
-  const generateQuestions = (words: VocabItem[]) => {
-    const list: TestQuestion[] = words.map((w) => {
+  const setupMatchingBoard = (pool: VocabItem[]) => {
+    const slice = pool.slice(0, 4);
+    const tiles: Array<{ id: string; vocabId: string; text: string; type: 'zh' | 'vi'; matched: boolean }> = [];
+    slice.forEach((w) => {
+      tiles.push({
+        id: `zh_${w.id}`,
+        vocabId: w.id,
+        text: w.hanzi,
+        type: 'zh',
+        matched: false,
+      });
+      tiles.push({
+        id: `vi_${w.id}`,
+        vocabId: w.id,
+        text: w.meaningVi.replace(/^\([^)]+\)\s*/g, '').split(/[,;]/)[0].trim(),
+        type: 'vi',
+        matched: false,
+      });
+    });
+    setMatchBoard(tiles.sort(() => Math.random() - 0.5));
+    setSelectedTile(null);
+    setWrongPairIds([]);
+  };
+
+  const startTest = (wordsToTest?: VocabItem[]) => {
+    const sourceWords = wordsToTest
+      ? [...wordsToTest]
+      : [...allWords]
+          .sort(() => Math.random() - 0.5)
+          .slice(0, testSize === 0 ? allWords.length : Math.min(testSize, allWords.length));
+
+    setFailedVocabList([]);
+    setIsTestFinished(false);
+
+    if (testMode === 'matching') {
+      setMatchPool(sourceWords);
+      setupMatchingBoard(sourceWords);
+      setQuestions(
+        sourceWords.map((w) => ({
+          vocab: w,
+          type: 'flashcard',
+          prompt: w.hanzi,
+          expectedAnswers: [w.meaningVi],
+        }))
+      );
+      setIsStarted(true);
+      return;
+    }
+
+    const list: TestQuestion[] = sourceWords.map((w) => {
       let qType: 'flashcard' | 'writing-zh' | 'writing-vi' = 'writing-zh';
 
       if (testMode === 'mix') {
@@ -67,23 +119,10 @@ export function TestArena({
           vocab: w,
           type: qType,
           prompt: w.meaningVi.split(/[,;\/]/)[0].trim(),
-          subPrompt: w.amHanViet ? `Hán Việt: ${w.amHanViet}` : undefined,
+          subPrompt: w.amHanViet || undefined,
           expectedAnswers: [w.hanzi.trim().toLowerCase()],
         };
-      } else if (qType === 'writing-vi') {
-        const synonyms = w.meaningVi
-          .split(/[,;\/]/)
-          .map((s) => s.trim().toLowerCase())
-          .filter(Boolean);
-        return {
-          vocab: w,
-          type: qType,
-          prompt: w.hanzi,
-          subPrompt: w.pinyin,
-          expectedAnswers: synonyms,
-        };
       } else {
-        // Flashcard recognition
         const synonyms = w.meaningVi
           .split(/[,;\/]/)
           .map((s) => s.trim().toLowerCase())
@@ -92,7 +131,7 @@ export function TestArena({
           vocab: w,
           type: qType,
           prompt: w.hanzi,
-          subPrompt: w.amHanViet ? `Hán Việt: ${w.amHanViet}` : undefined,
+          subPrompt: qType === 'writing-vi' ? w.pinyin : w.amHanViet || undefined,
           expectedAnswers: synonyms,
         };
       }
@@ -101,8 +140,60 @@ export function TestArena({
     setQuestions(list.sort(() => Math.random() - 0.5));
     setCurrentIndex(0);
     setUserInput('');
-    setFailedVocabList([]);
-    setIsTestFinished(false);
+    setIsStarted(true);
+  };
+
+  const handleTileClick = async (tileId: string) => {
+    if (wrongPairIds.length > 0) return;
+    const clicked = matchBoard.find((t) => t.id === tileId);
+    if (!clicked || clicked.matched) return;
+
+    if (!selectedTile) {
+      setSelectedTile(tileId);
+      return;
+    }
+
+    if (selectedTile === tileId) {
+      setSelectedTile(null);
+      return;
+    }
+
+    const prevTile = matchBoard.find((t) => t.id === selectedTile);
+    if (!prevTile) {
+      setSelectedTile(tileId);
+      return;
+    }
+
+    if (prevTile.vocabId === clicked.vocabId && prevTile.type !== clicked.type) {
+      const updated = matchBoard.map((t) =>
+        t.vocabId === clicked.vocabId ? { ...t, matched: true } : t
+      );
+      setMatchBoard(updated);
+      setSelectedTile(null);
+
+      if (updated.every((t) => t.matched)) {
+        const remaining = matchPool.slice(4);
+        if (remaining.length > 0) {
+          setMatchPool(remaining);
+          setTimeout(() => setupMatchingBoard(remaining), 220);
+        } else {
+          await finishTest(failedVocabList);
+        }
+      }
+    } else {
+      // Wrong match -> red flash + shake + record failed word
+      setWrongPairIds([prevTile.id, clicked.id]);
+      setSelectedTile(null);
+      const wrongVocab = allWords.find((w) => w.id === prevTile.vocabId);
+      if (wrongVocab) {
+        setFailedVocabList((prev) =>
+          prev.some((item) => item.id === wrongVocab.id) ? prev : [...prev, wrongVocab]
+        );
+      }
+      setTimeout(() => {
+        setWrongPairIds([]);
+      }, 380);
+    }
   };
 
   const handleAnswerSubmit = (e: React.FormEvent) => {
@@ -112,19 +203,24 @@ export function TestArena({
     const currentQ = questions[currentIndex];
     const text = userInput.trim().toLowerCase();
     const isCorrect = currentQ.expectedAnswers.some(
-      (ans) => ans === text || text.includes(ans)
+      (ans) => ans === text || (text.length >= 2 && ans.includes(text))
     );
 
+    const updatedFailed = isCorrect
+      ? failedVocabList
+      : failedVocabList.some((w) => w.id === currentQ.vocab.id)
+      ? failedVocabList
+      : [...failedVocabList, currentQ.vocab];
+
     if (!isCorrect) {
-      setFailedVocabList((prev) => [...prev, currentQ.vocab]);
+      setFailedVocabList(updatedFailed);
     }
 
     if (currentIndex + 1 < questions.length) {
       setCurrentIndex((idx) => idx + 1);
       setUserInput('');
     } else {
-      // Completed all questions in test!
-      finishTest(isCorrect ? failedVocabList : [...failedVocabList, currentQ.vocab]);
+      finishTest(updatedFailed);
     }
   };
 
@@ -132,7 +228,6 @@ export function TestArena({
     setIsTestFinished(true);
     const isPassed = allFailed.length === 0;
 
-    // Record test in DB
     await db.testRecords.add({
       id: `test_${Date.now()}`,
       deckId,
@@ -145,11 +240,9 @@ export function TestArena({
     });
 
     if (isPassed) {
-      // 100% Passed!
       confetti({ particleCount: 80, spread: 60, origin: { y: 0.6 } });
-      // Mark all words as Mastered!
-      for (const w of allWords) {
-        await db.vocab.update(w.id, {
+      for (const q of questions) {
+        await db.vocab.update(q.vocab.id, {
           isMastered: true,
           lastReviewedAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
@@ -157,7 +250,6 @@ export function TestArena({
       }
       onSuccess();
     } else {
-      // Quarantine failed words into Sổ tay từ hay sai
       for (const w of allFailed) {
         const nextLapse = (w.lapseCount || 0) + 1;
         await db.vocab.update(w.id, {
@@ -169,11 +261,51 @@ export function TestArena({
     }
   };
 
-  // Launch Vòng Cứu Hộ (Targeted Remediation)
-  const startRemediation = () => {
-    setIsRemediationMode(true);
-    generateQuestions(failedVocabList);
-  };
+  // ── Setup Screen ──────────────────────────────────────────────────────
+  if (!isStarted) {
+    return (
+      <div className="max-w-md mx-auto py-12 px-4">
+        <button
+          onClick={onExit}
+          className="inline-flex items-center gap-1.5 py-2 px-3.5 rounded-xl bg-white hover:bg-slate-200/70 text-slate-700 text-xs font-semibold shadow-2xs transition-colors mb-8"
+        >
+          <ArrowLeft size={14} /> Quay lại
+        </button>
+
+        <div className="bg-white rounded-3xl p-6 shadow-xs space-y-6">
+          <h2 className="text-xl font-bold text-slate-900">Số từ kiểm tra</h2>
+
+          <div className="grid grid-cols-4 gap-2.5">
+            {[
+              { label: '10', value: 10 },
+              { label: '20', value: 20 },
+              { label: '30', value: 30 },
+              { label: 'Tất cả', value: 0 },
+            ].map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => setTestSize(opt.value)}
+                className={`py-3 rounded-2xl text-sm font-bold transition-all ${
+                  testSize === opt.value
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
+          <button
+            onClick={() => startTest()}
+            className="w-full py-3.5 bg-slate-900 hover:bg-slate-800 text-white font-semibold rounded-2xl text-sm transition-colors shadow-xs"
+          >
+            Bắt đầu kiểm tra
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // ── Result Screen ─────────────────────────────────────────────────────
   if (isTestFinished) {
@@ -181,58 +313,106 @@ export function TestArena({
     const correctCount = questions.length - failedVocabList.length;
 
     return (
-      <div className="max-w-lg mx-auto py-12 px-4 text-center">
-        {isPassed ? (
-          <div>
-            <div className="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-4 text-emerald-600">
-              <Award size={32} />
-            </div>
-            <h2 className="text-2xl font-bold text-slate-900">Đạt 100% - Tinh thông</h2>
-            <div className="text-sm text-slate-500 mt-2 mb-8">
-              Chúc mừng! Bạn đã hoàn thành chính xác toàn bộ {questions.length} câu hỏi theo tiêu chuẩn Mastery Learning.
-            </div>
-            <button
-              onClick={onExit}
-              className="py-3 px-8 bg-slate-900 hover:bg-slate-800 text-white font-semibold rounded-2xl text-xs transition-colors"
-            >
-              Hoàn thành bài thi
-            </button>
-          </div>
-        ) : (
-          <div>
-            <div className="w-16 h-16 bg-rose-50 rounded-full flex items-center justify-center mx-auto mb-4 text-rose-600">
-              <ShieldAlert size={32} />
-            </div>
-            <h2 className="text-2xl font-bold text-slate-900">Chưa đạt tiêu chuẩn 100%</h2>
-            <div className="text-sm text-slate-500 mt-2 mb-2">
-              Kết quả: {correctCount} / {questions.length} câu đúng.
-            </div>
-            <div className="text-xs text-slate-400 mb-8">
-              Theo quy tắc Mastery Learning, cần 100% để được công nhận. Các từ chưa đúng đã được chuyển vào Sổ tay từ hay sai.
-            </div>
-
-            <div className="flex items-center justify-center gap-3">
+      <div className="max-w-md mx-auto py-16 px-4 text-center">
+        <div className="bg-white rounded-3xl p-8 shadow-xs">
+          {isPassed ? (
+            <div>
+              <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4 text-emerald-700">
+                <Award size={32} />
+              </div>
+              <h2 className="text-2xl font-bold text-slate-900 mb-2">Đạt 100%</h2>
+              <div className="text-sm font-semibold text-slate-600 mb-6">
+                {correctCount} / {questions.length} từ chính xác
+              </div>
               <button
                 onClick={onExit}
-                className="py-2.5 px-5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-xs transition-colors"
+                className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white font-semibold rounded-2xl text-xs transition-colors"
               >
-                Về danh sách
-              </button>
-              <button
-                onClick={startRemediation}
-                className="py-2.5 px-6 bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-xl text-xs transition-colors shadow-sm flex items-center gap-1.5"
-              >
-                <RotateCcw size={13} />
-                <span>Vòng cứu hộ ({failedVocabList.length} từ)</span>
+                Hoàn thành
               </button>
             </div>
-          </div>
-        )}
+          ) : (
+            <div>
+              <div className="w-16 h-16 bg-rose-100 rounded-full flex items-center justify-center mx-auto mb-4 text-rose-600">
+                <ShieldAlert size={32} />
+              </div>
+              <h2 className="text-2xl font-bold text-slate-900 mb-2">
+                {correctCount} / {questions.length} chính xác
+              </h2>
+              <div className="text-sm font-medium text-rose-600 mb-6">
+                Sai {failedVocabList.length} từ
+              </div>
+
+              <div className="flex items-center justify-center gap-2.5">
+                <button
+                  onClick={onExit}
+                  className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-2xl text-xs transition-colors"
+                >
+                  Quay lại
+                </button>
+                <button
+                  onClick={() => startTest(failedVocabList)}
+                  className="flex-1 py-3 bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-2xl text-xs transition-colors shadow-xs flex items-center justify-center gap-1.5"
+                >
+                  <RotateCcw size={13} />
+                  <span>Làm lại từ sai ({failedVocabList.length})</span>
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     );
   }
 
-  // ── Testing Screen ────────────────────────────────────────────────────
+  // ── Matching Test Screen ──────────────────────────────────────────────
+  if (testMode === 'matching') {
+    return (
+      <div className="max-w-xl mx-auto py-8 px-4">
+        <div className="flex items-center justify-between pb-6">
+          <button
+            onClick={onExit}
+            className="inline-flex items-center gap-1.5 py-2 px-3.5 rounded-xl bg-white hover:bg-slate-200/70 text-slate-700 text-xs font-semibold shadow-2xs transition-colors"
+          >
+            <ArrowLeft size={13} /> Thoát
+          </button>
+
+          <div className="text-xs font-bold text-slate-700 bg-white py-1.5 px-3.5 rounded-xl shadow-2xs">
+            Còn {matchPool.length} từ
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          {matchBoard.map((tile) => {
+            const isSelected = selectedTile === tile.id;
+            const isWrong = wrongPairIds.includes(tile.id);
+            return (
+              <button
+                key={tile.id}
+                disabled={tile.matched}
+                onClick={() => handleTileClick(tile.id)}
+                className={`h-24 p-4 rounded-2xl text-center flex items-center justify-center ${
+                  tile.matched
+                    ? 'opacity-0 pointer-events-none scale-95 transition-all duration-150'
+                    : isWrong
+                    ? 'bg-rose-600 text-white shadow-md animate-shake'
+                    : isSelected
+                    ? 'bg-slate-900 text-white shadow-md scale-[1.02] transition-transform duration-100'
+                    : 'bg-white hover:bg-slate-50 text-slate-900 shadow-xs transition-colors duration-100'
+                }`}
+              >
+                <span className={tile.type === 'zh' ? 'text-2xl font-bold' : 'text-sm font-semibold'}>
+                  {tile.text}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Input Testing Screen ──────────────────────────────────────────────
   const currentQ = questions[currentIndex];
   if (!currentQ) return null;
 
@@ -242,24 +422,24 @@ export function TestArena({
       <div className="flex items-center justify-between pb-6">
         <button
           onClick={onExit}
-          className="inline-flex items-center gap-1.5 py-1.5 px-3 rounded-xl bg-slate-50 text-slate-600 hover:text-slate-900 text-xs font-medium transition-colors"
+          className="inline-flex items-center gap-1.5 py-2 px-3.5 rounded-xl bg-white hover:bg-slate-200/70 text-slate-700 text-xs font-semibold shadow-2xs transition-colors"
         >
-          <ArrowLeft size={13} /> Dừng bài kiểm tra
+          <ArrowLeft size={13} /> Thoát
         </button>
 
-        <div className="text-xs font-semibold text-slate-700">
-          Câu {currentIndex + 1} / {questions.length}
+        <div className="text-xs font-bold text-slate-700 bg-white py-1.5 px-3.5 rounded-xl shadow-2xs">
+          {currentIndex + 1} / {questions.length}
         </div>
       </div>
 
       {/* Question Card */}
-      <div className="py-12 px-6 bg-slate-50/70 rounded-3xl text-center">
+      <div className="py-12 px-6 bg-white rounded-3xl text-center shadow-sm">
         <div className="h-28 flex flex-col items-center justify-center">
           <span className="text-4xl font-bold text-slate-900 tracking-tight">
             {currentQ.prompt}
           </span>
           {currentQ.subPrompt && (
-            <div className="text-xs text-slate-400 mt-2 font-medium">
+            <div className="text-sm text-blue-600 mt-2 font-semibold">
               {currentQ.subPrompt}
             </div>
           )}
@@ -278,18 +458,17 @@ export function TestArena({
               ? 'Gõ chữ Hán...'
               : 'Gõ nghĩa tiếng Việt...'
           }
-          className="w-full py-3.5 px-4 rounded-2xl text-sm text-center bg-slate-50 focus:bg-white text-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-400 transition-all"
+          className="w-full py-4 px-4 rounded-2xl text-base text-center bg-white shadow-xs text-slate-900 font-semibold focus:outline-none focus:ring-2 focus:ring-slate-900 transition-all"
         />
 
         <button
           type="submit"
           disabled={!userInput.trim()}
-          className="w-full py-3 bg-slate-900 hover:bg-slate-800 disabled:opacity-30 text-white rounded-2xl text-xs font-semibold transition-all shadow-sm"
+          className="w-full py-3.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-30 text-white rounded-2xl text-xs font-semibold transition-all shadow-xs"
         >
-          {currentIndex + 1 === questions.length ? 'Nộp bài thi' : 'Câu tiếp theo'}
+          {currentIndex + 1 === questions.length ? 'Hoàn thành' : 'Tiếp theo'}
         </button>
       </form>
     </div>
   );
 }
-

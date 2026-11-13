@@ -28,10 +28,17 @@ export function calculateRetention(lastReviewedAt?: string, stability: number = 
   return Math.max(0.1, Math.min(1.0, r));
 }
 
-// Seed HSK 3 and HSK 4 if database is brand new
+// Seed HSK 3 and HSK 4 if database is brand new or needs repair for empty meanings
 export async function seedInitialDecks(): Promise<void> {
   const deckCount = await db.decks.count();
-  if (deckCount > 0) return;
+  if (deckCount > 0) {
+    const brokenCount = await db.vocab
+      .filter((w) => !w.meaningVi || w.meaningVi.trim() === '' || /^từ(\/|\s)/i.test(w.meaningVi.trim()))
+      .count();
+    if (brokenCount === 0) return;
+    await db.vocab.clear();
+    await db.decks.clear();
+  }
 
   try {
     // 1. Seed HSK 3

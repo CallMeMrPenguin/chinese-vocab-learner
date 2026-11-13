@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { X, Plus, AlertCircle } from 'lucide-react';
+import { X } from 'lucide-react';
 import { db } from '@/lib/db';
 import { VocabItem } from '@/lib/types';
 
@@ -36,9 +36,6 @@ export function ImportModal({ deckId, isOpen, onClose, onSuccess }: ImportModalP
         const line = lines[i].trim();
         if (!line) continue;
 
-        // Supported formats:
-        // 1. "学习 - xuéxí - Học tập - học tập"
-        // 2. "学习 - học tập" (tab, colon or dash)
         let parts = line.split(/\t| - |: |;| -/).map(s => s.trim()).filter(Boolean);
         if (parts.length === 1 && line.includes('-')) {
           parts = line.split('-').map(s => s.trim());
@@ -86,7 +83,6 @@ export function ImportModal({ deckId, isOpen, onClose, onSuccess }: ImportModalP
 
       if (newItems.length > 0) {
         await db.vocab.bulkAdd(newItems);
-        // Update deck count
         const total = await db.vocab.where('deckId').equals(deckId).count();
         await db.decks.update(deckId, { totalWords: total, updatedAt: timestamp });
         onSuccess();
@@ -145,28 +141,14 @@ export function ImportModal({ deckId, isOpen, onClose, onSuccess }: ImportModalP
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
       <div className="w-full max-w-lg bg-white rounded-3xl p-6 shadow-2xl relative">
-        {/* Header */}
-        <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-          <div>
-            <h2 className="text-lg font-bold text-slate-900">Nhập từ vựng</h2>
-            <div className="text-xs text-slate-400 mt-0.5">
-              Tự động phân tách từ chữ Hán và nghĩa tiếng Việt
-            </div>
-          </div>
+        <div className="flex items-center justify-between pb-4">
+          <h2 className="text-lg font-bold text-slate-900">Thêm từ vựng</h2>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-colors"
+            className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
           >
             <X size={18} />
           </button>
-        </div>
-
-        {/* Feature 1 Label Note */}
-        <div className="flex items-center gap-2 p-2.5 my-3 bg-slate-50 rounded-xl text-xs text-slate-600">
-          <AlertCircle size={14} className="text-blue-600 shrink-0" />
-          <span>
-            Tính năng tra từ tự động đang phát triển. Hiện tại hỗ trợ dán danh sách hoặc nhập trực tiếp.
-          </span>
         </div>
 
         {/* Tabs */}
@@ -174,8 +156,8 @@ export function ImportModal({ deckId, isOpen, onClose, onSuccess }: ImportModalP
           <button
             type="button"
             onClick={() => setActiveTab('paste')}
-            className={`flex-1 py-1.5 rounded-lg transition-all ${
-              activeTab === 'paste' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+            className={`flex-1 py-2 rounded-lg transition-all ${
+              activeTab === 'paste' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
             }`}
           >
             Dán danh sách
@@ -183,34 +165,28 @@ export function ImportModal({ deckId, isOpen, onClose, onSuccess }: ImportModalP
           <button
             type="button"
             onClick={() => setActiveTab('manual')}
-            className={`flex-1 py-1.5 rounded-lg transition-all ${
-              activeTab === 'manual' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+            className={`flex-1 py-2 rounded-lg transition-all ${
+              activeTab === 'manual' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
             }`}
           >
             Nhập từng từ
           </button>
         </div>
 
-        {/* Tab 1: Paste Input */}
         {activeTab === 'paste' ? (
           <div>
             <textarea
               rows={8}
               value={pasteContent}
               onChange={(e) => setPasteContent(e.target.value)}
-              placeholder="Dán từ vựng theo dạng:
-学习 - xuéxí - Học tập - học tập
-准备 - zhǔnbèi - Chuẩn bị - chuẩn bị
-hoặc:
-学习 - học tập
-准备 - chuẩn bị"
-              className="w-full p-3.5 bg-slate-50 rounded-2xl text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-300 font-mono resize-none leading-relaxed"
+              placeholder="学习 - xuéxí - Học tập - học tập&#10;准备 - zhǔnbèi - Chuẩn bị - chuẩn bị"
+              className="w-full p-3.5 bg-slate-100 rounded-2xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 font-mono resize-none leading-relaxed"
             />
             <div className="flex items-center justify-end gap-2 mt-4">
               <button
                 type="button"
                 onClick={onClose}
-                className="py-2 px-4 rounded-xl text-xs font-medium text-slate-500 hover:bg-slate-50"
+                className="py-2.5 px-4 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100"
               >
                 Hủy
               </button>
@@ -218,57 +194,56 @@ hoặc:
                 type="button"
                 onClick={handlePasteImport}
                 disabled={isSubmitting || !pasteContent.trim()}
-                className="py-2 px-5 bg-slate-900 hover:bg-slate-800 disabled:opacity-30 rounded-xl text-xs font-semibold text-white transition-all shadow-sm"
+                className="py-2.5 px-5 bg-slate-900 hover:bg-slate-800 disabled:opacity-30 rounded-xl text-xs font-semibold text-white transition-all shadow-xs"
               >
-                {isSubmitting ? 'Đang thêm...' : 'Xác nhận nhập'}
+                {isSubmitting ? 'Đang thêm...' : 'Thêm'}
               </button>
             </div>
           </div>
         ) : (
-          /* Tab 2: Manual Input */
           <form onSubmit={handleManualAdd} className="space-y-3">
             <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1">Chữ Hán *</label>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Chữ Hán</label>
               <input
                 type="text"
                 required
                 value={manualHanzi}
                 onChange={(e) => setManualHanzi(e.target.value)}
-                placeholder="Ví dụ: 学习"
-                className="w-full px-3.5 py-2 text-xs bg-slate-50 rounded-xl text-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-300"
+                placeholder="学习"
+                className="w-full px-3.5 py-2.5 text-xs bg-slate-100 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900"
               />
             </div>
             <div className="grid grid-cols-2 gap-2.5">
               <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1">Phiên âm (Pinyin)</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Phiên âm</label>
                 <input
                   type="text"
                   value={manualPinyin}
                   onChange={(e) => setManualPinyin(e.target.value)}
                   placeholder="xuéxí"
-                  className="w-full px-3.5 py-2 text-xs bg-slate-50 rounded-xl text-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-300"
+                  className="w-full px-3.5 py-2.5 text-xs bg-slate-100 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900"
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1">Âm Hán Việt</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Hán Việt</label>
                 <input
                   type="text"
                   value={manualAmHanViet}
                   onChange={(e) => setManualAmHanViet(e.target.value)}
-                  placeholder="Học tập"
-                  className="w-full px-3.5 py-2 text-xs bg-slate-50 rounded-xl text-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-300"
+                  placeholder="Học Tập"
+                  className="w-full px-3.5 py-2.5 text-xs bg-slate-100 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900"
                 />
               </div>
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1">Nghĩa tiếng Việt *</label>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Nghĩa tiếng Việt</label>
               <input
                 type="text"
                 required
                 value={manualMeaning}
                 onChange={(e) => setManualMeaning(e.target.value)}
-                placeholder="Học tập, nghiên cứu (có thể ngăn cách dấu phẩy)"
-                className="w-full px-3.5 py-2 text-xs bg-slate-50 rounded-xl text-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-300"
+                placeholder="Học tập, nghiên cứu"
+                className="w-full px-3.5 py-2.5 text-xs bg-slate-100 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900"
               />
             </div>
 
@@ -276,14 +251,14 @@ hoặc:
               <button
                 type="button"
                 onClick={onClose}
-                className="py-2 px-4 rounded-xl text-xs font-medium text-slate-500 hover:bg-slate-50"
+                className="py-2.5 px-4 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100"
               >
                 Hủy
               </button>
               <button
                 type="submit"
                 disabled={isSubmitting || !manualHanzi.trim() || !manualMeaning.trim()}
-                className="py-2 px-5 bg-slate-900 hover:bg-slate-800 disabled:opacity-30 rounded-xl text-xs font-semibold text-white transition-all shadow-sm"
+                className="py-2.5 px-5 bg-slate-900 hover:bg-slate-800 disabled:opacity-30 rounded-xl text-xs font-semibold text-white transition-all shadow-xs"
               >
                 {isSubmitting ? 'Đang lưu...' : 'Thêm từ'}
               </button>
@@ -294,4 +269,3 @@ hoặc:
     </div>
   );
 }
-

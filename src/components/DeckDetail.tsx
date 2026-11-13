@@ -4,14 +4,10 @@ import React, { useState, useMemo } from 'react';
 import { ColumnDef } from '@tanstack/react-table';
 import {
   ArrowLeft,
-  Play,
-  Award,
   Plus,
   Edit3,
-  Trash2,
   AlertTriangle,
   RotateCcw,
-  Sparkles,
 } from 'lucide-react';
 import { Deck, VocabItem, StudyMode, TestModeType } from '@/lib/types';
 import { db } from '@/lib/db';
@@ -37,6 +33,7 @@ export function DeckDetail({
   onOpenLeech,
   onDeckUpdated,
 }: DeckDetailProps) {
+  const [selectedMainTrack, setSelectedMainTrack] = useState<'practice' | 'test' | null>(null);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showEditDeckModal, setShowEditDeckModal] = useState(false);
   const [editTitle, setEditTitle] = useState(deck.title);
@@ -44,13 +41,11 @@ export function DeckDetail({
   const [editTopic, setEditTopic] = useState(deck.topic || '');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
-  // Leech words count
   const leechCount = useMemo(
     () => vocabList.filter((w) => w.isLeech || (w.lapseCount || 0) >= 2).length,
     [vocabList]
   );
 
-  // Handle Edit Deck
   const handleSaveDeck = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editTitle.trim()) return;
@@ -64,7 +59,6 @@ export function DeckDetail({
     onDeckUpdated();
   };
 
-  // Handle Delete Deck (inside edit modal per user Rule 16)
   const handleDeleteDeck = async () => {
     await db.vocab.where('deckId').equals(deck.id).delete();
     await db.decks.delete(deck.id);
@@ -73,7 +67,6 @@ export function DeckDetail({
     onBack();
   };
 
-  // TanStack Columns for Vocabulary Table
   const columns = useMemo<ColumnDef<VocabItem>[]>(
     () => [
       {
@@ -86,51 +79,52 @@ export function DeckDetail({
       {
         accessorKey: 'pinyin',
         header: 'Phiên âm',
-        cell: (info) => <span className="font-medium text-slate-700">{info.getValue<string>()}</span>,
+        cell: (info) => <span className="font-semibold text-slate-700">{info.getValue<string>()}</span>,
       },
       {
         accessorKey: 'amHanViet',
         header: 'Hán Việt',
-        cell: (info) => <span className="text-slate-600">{info.getValue<string>() || '—'}</span>,
+        cell: (info) => <span className="text-slate-700 font-medium">{info.getValue<string>() || '—'}</span>,
       },
       {
         accessorKey: 'pos',
         header: 'Từ loại',
         cell: (info) => (
-          <span className="text-slate-400 text-xs">{info.getValue<string>() || '—'}</span>
+          <span className="text-slate-500 text-xs">{info.getValue<string>() || '—'}</span>
         ),
       },
       {
         accessorKey: 'meaningVi',
         header: 'Nghĩa tiếng Việt',
-        cell: (info) => <span className="text-slate-800 line-clamp-2">{info.getValue<string>()}</span>,
-      },
-      {
-        id: 'progress',
-        header: 'Tiến trình',
-        cell: ({ row }) => {
-          const item = row.original;
-          return (
-            <div className="flex items-center gap-1 text-[11px] font-medium text-slate-500">
-              <span className="py-0.5 px-1.5 bg-slate-100 rounded">F: {item.flashcardStep || 0}/3</span>
-              <span className="py-0.5 px-1.5 bg-slate-100 rounded">M: {item.matchingStep || 0}/2</span>
-              <span className="py-0.5 px-1.5 bg-slate-100 rounded">W: {item.writingZhStep || 0}/2</span>
-            </div>
-          );
-        },
+        cell: (info) => <span className="text-slate-900 line-clamp-2">{info.getValue<string>()}</span>,
       },
       {
         accessorKey: 'isMastered',
         header: 'Trạng thái',
-        cell: (info) => {
-          const isMastered = info.getValue<boolean>();
-          return isMastered ? (
-            <span className="py-0.5 px-2 bg-emerald-50 text-emerald-600 rounded-full font-semibold text-xs inline-block">
-              Tinh thông
-            </span>
-          ) : (
-            <span className="py-0.5 px-2 bg-slate-100 text-slate-400 rounded-full text-xs inline-block">
-              Đang học
+        cell: ({ row }) => {
+          const item = row.original;
+          const practiced =
+            (item.flashcardStep || 0) > 0 ||
+            (item.matchingStep || 0) > 0 ||
+            (item.writingZhStep || 0) > 0 ||
+            (item.writingViStep || 0) > 0;
+          if (item.isMastered) {
+            return (
+              <span className="py-1 px-2.5 bg-emerald-100 text-emerald-800 rounded-lg font-bold text-xs inline-block">
+                Đã thuộc
+              </span>
+            );
+          }
+          if (practiced) {
+            return (
+              <span className="py-1 px-2.5 bg-blue-100 text-blue-800 rounded-lg font-semibold text-xs inline-block">
+                Đang học
+              </span>
+            );
+          }
+          return (
+            <span className="py-1 px-2.5 bg-slate-200/80 text-slate-600 rounded-lg font-medium text-xs inline-block">
+              Chưa học
             </span>
           );
         },
@@ -140,141 +134,189 @@ export function DeckDetail({
   );
 
   return (
-    <div className="w-full max-w-6xl mx-auto py-6 px-4 space-y-6">
-      {/* ── Top Header ─────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4">
+    <div className="w-full max-w-6xl mx-auto py-8 px-4 space-y-6">
+      {/* ── Top Bar ────────────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <button
+            type="button"
             onClick={onBack}
-            className="inline-flex items-center gap-1.5 py-1.5 px-3 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 text-xs font-medium transition-colors mb-3"
+            className="inline-flex items-center gap-1.5 py-2 px-3.5 rounded-xl bg-white hover:bg-slate-200/70 text-slate-800 text-xs font-semibold shadow-xs transition-colors mb-4 cursor-pointer"
           >
-            <ArrowLeft size={13} /> Tất cả bộ từ
+            <ArrowLeft size={14} /> Tất cả bộ từ
           </button>
 
-          <div className="flex items-center gap-3">
-            <h1 className="text-3xl font-bold text-slate-900 tracking-tight">{deck.title}</h1>
-            {/* Single Pen Button (Merged Edit inside Modal per Rule 16) */}
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">{deck.title}</h1>
             <button
+              type="button"
               onClick={() => setShowEditDeckModal(true)}
-              className="p-1.5 rounded-xl text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition-colors"
-              title="Chỉnh sửa bộ từ"
+              className="p-2 rounded-xl text-slate-600 hover:text-slate-950 bg-white hover:bg-slate-200/70 shadow-xs transition-colors cursor-pointer"
+              title="Chỉnh sửa"
             >
-              <Edit3 size={16} />
+              <Edit3 size={15} />
             </button>
           </div>
 
-          <div className="flex items-center gap-2 mt-2 text-xs font-medium text-slate-500">
+          <div className="flex items-center gap-2 mt-2.5 text-xs font-semibold text-slate-600">
             {deck.hskLevel && (
-              <span className="py-0.5 px-2.5 bg-slate-100 text-slate-700 rounded-full">
+              <span className="py-1 px-2.5 bg-slate-200 text-slate-800 rounded-lg">
                 {deck.hskLevel}
               </span>
             )}
             {deck.topic && (
-              <span className="py-0.5 px-2.5 bg-slate-100 text-slate-700 rounded-full">
+              <span className="py-1 px-2.5 bg-slate-200 text-slate-800 rounded-lg">
                 {deck.topic}
               </span>
             )}
-            <span className="text-slate-300">|</span>
-            <span>{vocabList.length} từ vựng</span>
-            <span className="text-slate-300">|</span>
-            <span className="text-blue-600">Độ bền trí nhớ: {deck.healthPercent || 100}%</span>
+            <span className="text-slate-400">|</span>
+            <span>{vocabList.length} từ</span>
           </div>
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex items-center gap-2 flex-wrap">
+        {/* Utility Actions */}
+        <div className="flex items-center gap-2.5 flex-wrap">
           <button
+            type="button"
             onClick={() => setShowImportModal(true)}
-            className="py-2 px-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-colors flex items-center gap-1.5"
+            className="py-2.5 px-4 bg-white hover:bg-slate-200/70 text-slate-800 text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
           >
-            <Plus size={14} />
+            <Plus size={15} />
             <span>Nhập</span>
           </button>
 
           {leechCount > 0 && (
             <button
+              type="button"
               onClick={onOpenLeech}
-              className="py-2 px-3.5 bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs font-semibold rounded-xl transition-colors flex items-center gap-1.5"
+              className="py-2.5 px-4 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
             >
               <RotateCcw size={14} />
               <span>Từ hay sai ({leechCount})</span>
             </button>
           )}
-
-          {/* Test Button (100% Bloom Criterion) */}
-          <button
-            onClick={() => onStartTest('mix')}
-            className="py-2 px-4 bg-slate-100 hover:bg-slate-200 text-slate-900 text-xs font-semibold rounded-xl transition-colors flex items-center gap-1.5"
-          >
-            <Award size={14} className="text-blue-600" />
-            <span>Kiểm tra (100%)</span>
-          </button>
         </div>
       </div>
 
-      {/* ── Practice Modalities Bar ─────────────────────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <button
-          onClick={() => onStartPractice('flashcard')}
-          className="p-4 bg-slate-50 hover:bg-slate-100/80 rounded-2xl text-left transition-all group"
-        >
-          <div className="text-xs font-medium text-slate-400">Chế độ 1</div>
-          <div className="text-sm font-bold text-slate-900 mt-1 flex items-center justify-between">
-            <span>Lật thẻ</span>
-            <Play size={13} className="text-slate-400 group-hover:text-slate-900 transition-colors" />
-          </div>
-          <div className="text-[11px] text-slate-500 mt-1">3 lần nhớ không gợi ý</div>
-        </button>
+      {/* ── 2 Main Modes: Luyện tập & Kiểm tra ─────────────────────── */}
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            type="button"
+            onClick={() =>
+              setSelectedMainTrack(selectedMainTrack === 'practice' ? null : 'practice')
+            }
+            className={`py-4 px-6 rounded-2xl text-base font-bold transition-all cursor-pointer shadow-xs ${
+              selectedMainTrack === 'practice'
+                ? 'bg-slate-900 text-white shadow-md'
+                : 'bg-white hover:bg-slate-200/70 text-slate-900'
+            }`}
+          >
+            Luyện tập
+          </button>
 
-        <button
-          onClick={() => onStartPractice('matching')}
-          className="p-4 bg-slate-50 hover:bg-slate-100/80 rounded-2xl text-left transition-all group"
-        >
-          <div className="text-xs font-medium text-slate-400">Chế độ 2</div>
-          <div className="text-sm font-bold text-slate-900 mt-1 flex items-center justify-between">
-            <span>Ghép thẻ</span>
-            <Play size={13} className="text-slate-400 group-hover:text-slate-900 transition-colors" />
-          </div>
-          <div className="text-[11px] text-slate-500 mt-1">Dưới 2.0s / cặp (4 cặp/lượt)</div>
-        </button>
+          <button
+            type="button"
+            onClick={() =>
+              setSelectedMainTrack(selectedMainTrack === 'test' ? null : 'test')
+            }
+            className={`py-4 px-6 rounded-2xl text-base font-bold transition-all cursor-pointer shadow-xs ${
+              selectedMainTrack === 'test'
+                ? 'bg-blue-600 text-white shadow-md'
+                : 'bg-white hover:bg-slate-200/70 text-slate-900'
+            }`}
+          >
+            Kiểm tra
+          </button>
+        </div>
 
-        <button
-          onClick={() => onStartPractice('writing-zh')}
-          className="p-4 bg-slate-50 hover:bg-slate-100/80 rounded-2xl text-left transition-all group"
-        >
-          <div className="text-xs font-medium text-slate-400">Chế độ 3A</div>
-          <div className="text-sm font-bold text-slate-900 mt-1 flex items-center justify-between">
-            <span>Gõ chữ Hán</span>
-            <Play size={13} className="text-slate-400 group-hover:text-slate-900 transition-colors" />
+        {/* Sub-mode Selection when Luyện tập is clicked */}
+        {selectedMainTrack === 'practice' && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
+            <button
+              type="button"
+              onClick={() => onStartPractice('flashcard')}
+              className="py-3.5 px-4 bg-slate-800 hover:bg-slate-950 text-white rounded-xl text-sm font-bold text-center transition-colors shadow-xs cursor-pointer"
+            >
+              Lật thẻ
+            </button>
+            <button
+              type="button"
+              onClick={() => onStartPractice('matching')}
+              className="py-3.5 px-4 bg-slate-800 hover:bg-slate-950 text-white rounded-xl text-sm font-bold text-center transition-colors shadow-xs cursor-pointer"
+            >
+              Ghép thẻ
+            </button>
+            <button
+              type="button"
+              onClick={() => onStartPractice('writing-zh')}
+              className="py-3.5 px-4 bg-slate-800 hover:bg-slate-950 text-white rounded-xl text-sm font-bold text-center transition-colors shadow-xs cursor-pointer"
+            >
+              Gõ chữ Hán
+            </button>
+            <button
+              type="button"
+              onClick={() => onStartPractice('writing-vi')}
+              className="py-3.5 px-4 bg-slate-800 hover:bg-slate-950 text-white rounded-xl text-sm font-bold text-center transition-colors shadow-xs cursor-pointer"
+            >
+              Gõ tiếng Việt
+            </button>
           </div>
-          <div className="text-[11px] text-slate-500 mt-1">Nghĩa tiếng Việt $\to$ Gõ Hán</div>
-        </button>
+        )}
 
-        <button
-          onClick={() => onStartPractice('writing-vi')}
-          className="p-4 bg-slate-50 hover:bg-slate-100/80 rounded-2xl text-left transition-all group"
-        >
-          <div className="text-xs font-medium text-slate-400">Chế độ 3B</div>
-          <div className="text-sm font-bold text-slate-900 mt-1 flex items-center justify-between">
-            <span>Gõ tiếng Việt</span>
-            <Play size={13} className="text-slate-400 group-hover:text-slate-900 transition-colors" />
+        {/* Sub-mode Selection when Kiểm tra is clicked */}
+        {selectedMainTrack === 'test' && (
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-1">
+            <button
+              type="button"
+              onClick={() => onStartTest('mix')}
+              className="py-3.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold text-center transition-colors shadow-xs cursor-pointer"
+            >
+              Hỗn hợp
+            </button>
+            <button
+              type="button"
+              onClick={() => onStartTest('flashcard')}
+              className="py-3.5 px-4 bg-slate-800 hover:bg-slate-950 text-white rounded-xl text-sm font-bold text-center transition-colors shadow-xs cursor-pointer"
+            >
+              Lật thẻ
+            </button>
+            <button
+              type="button"
+              onClick={() => onStartTest('matching')}
+              className="py-3.5 px-4 bg-slate-800 hover:bg-slate-950 text-white rounded-xl text-sm font-bold text-center transition-colors shadow-xs cursor-pointer"
+            >
+              Ghép thẻ
+            </button>
+            <button
+              type="button"
+              onClick={() => onStartTest('writing-zh')}
+              className="py-3.5 px-4 bg-slate-800 hover:bg-slate-950 text-white rounded-xl text-sm font-bold text-center transition-colors shadow-xs cursor-pointer"
+            >
+              Gõ chữ Hán
+            </button>
+            <button
+              type="button"
+              onClick={() => onStartTest('writing-vi')}
+              className="py-3.5 px-4 bg-slate-800 hover:bg-slate-950 text-white rounded-xl text-sm font-bold text-center transition-colors shadow-xs cursor-pointer"
+            >
+              Gõ tiếng Việt
+            </button>
           </div>
-          <div className="text-[11px] text-slate-500 mt-1">Chữ Hán $\to$ Gõ nghĩa</div>
-        </button>
+        )}
       </div>
 
-      {/* ── Vocabulary Data Table (Strict Rule 17) ──────────────────── */}
+      {/* ── Vocabulary Data Table ──────────────────────────────────── */}
       <div className="pt-2">
         <DataTable<VocabItem>
           data={vocabList}
           columns={columns}
           pageSize={20}
-          searchPlaceholder="Tìm chữ Hán, phiên âm, âm Hán Việt, nghĩa..."
+          searchPlaceholder="Tìm chữ Hán, phiên âm, Hán Việt, nghĩa..."
           exportFilename={deck.title.toLowerCase().replace(/\s+/g, '_')}
         />
       </div>
 
-      {/* ── Import Modal ────────────────────────────────────────────── */}
       <ImportModal
         deckId={deck.id}
         isOpen={showImportModal}
@@ -282,62 +324,62 @@ export function DeckDetail({
         onSuccess={onDeckUpdated}
       />
 
-      {/* ── Edit Deck Modal (With merged Delete button per Rule 16) ─── */}
+      {/* ── Edit Deck Modal ────────────────────────────────────────── */}
       {showEditDeckModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
           <div className="w-full max-w-md bg-white rounded-3xl p-6 shadow-2xl relative">
-            <h2 className="text-lg font-bold text-slate-900 pb-3 border-b border-slate-100">
+            <h2 className="text-lg font-bold text-slate-900 pb-3">
               Chỉnh sửa bộ từ
             </h2>
 
-            <form onSubmit={handleSaveDeck} className="space-y-4 pt-4">
+            <form onSubmit={handleSaveDeck} className="space-y-4 pt-2">
               <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1">Tên bộ từ *</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">Tên bộ từ</label>
                 <input
                   type="text"
                   required
                   value={editTitle}
                   onChange={(e) => setEditTitle(e.target.value)}
-                  className="w-full px-3.5 py-2 text-xs bg-slate-50 rounded-xl text-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-300"
+                  className="w-full px-3.5 py-2.5 text-xs font-medium bg-slate-100 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">Cấp độ</label>
-                  <select
-                    value={editHsk}
-                    onChange={(e) => setEditHsk(e.target.value)}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 rounded-xl text-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-300"
-                  >
-                    <option value="Tự do">Tự do</option>
-                    <option value="HSK 1">HSK 1</option>
-                    <option value="HSK 2">HSK 2</option>
-                    <option value="HSK 3">HSK 3</option>
-                    <option value="HSK 4">HSK 4</option>
-                    <option value="HSK 5">HSK 5</option>
-                    <option value="HSK 6">HSK 6</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">Chủ đề</label>
-                  <input
-                    type="text"
-                    value={editTopic}
-                    onChange={(e) => setEditTopic(e.target.value)}
-                    placeholder="Du lịch, Ẩm thực..."
-                    className="w-full px-3.5 py-2 text-xs bg-slate-50 rounded-xl text-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-300"
-                  />
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">Cấp độ</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {['Tự do', 'HSK 1', 'HSK 2', 'HSK 3', 'HSK 4', 'HSK 5', 'HSK 6'].map((lvl) => (
+                    <button
+                      key={lvl}
+                      type="button"
+                      onClick={() => setEditHsk(lvl)}
+                      className={`py-1.5 px-3 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                        editHsk === lvl
+                          ? 'bg-slate-900 text-white'
+                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                      }`}
+                    >
+                      {lvl}
+                    </button>
+                  ))}
                 </div>
               </div>
 
-              {/* Action Buttons: Save & Red Delete inside Edit Modal per Rule 16 */}
-              <div className="flex items-center justify-between pt-4 border-t border-slate-100">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">Chủ đề</label>
+                <input
+                  type="text"
+                  value={editTopic}
+                  onChange={(e) => setEditTopic(e.target.value)}
+                  placeholder="Du lịch, Ẩm thực..."
+                  className="w-full px-3.5 py-2.5 text-xs font-medium bg-slate-100 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                />
+              </div>
+
+              <div className="flex items-center justify-between pt-4">
                 <button
                   type="button"
                   onClick={() => setShowDeleteConfirm(true)}
-                  className="py-2 px-3 text-xs font-semibold text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"
+                  className="py-2 px-3.5 text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-xl transition-colors cursor-pointer"
                 >
                   Xóa bộ từ
                 </button>
@@ -346,42 +388,38 @@ export function DeckDetail({
                   <button
                     type="button"
                     onClick={() => setShowEditDeckModal(false)}
-                    className="py-2 px-4 rounded-xl text-xs font-medium text-slate-500 hover:bg-slate-50"
+                    className="py-2 px-4 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer"
                   >
                     Hủy
                   </button>
                   <button
                     type="submit"
-                    className="py-2 px-5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold transition-colors shadow-sm"
+                    className="py-2 px-5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
                   >
-                    Lưu thay đổi
+                    Lưu
                   </button>
                 </div>
               </div>
             </form>
 
-            {/* Confirm Delete Sub-overlay */}
             {showDeleteConfirm && (
               <div className="absolute inset-0 bg-white rounded-3xl p-6 flex flex-col items-center justify-center text-center">
-                <AlertTriangle size={32} className="text-rose-600 mb-2" />
-                <h3 className="text-base font-bold text-slate-900">Xác nhận xóa bộ từ?</h3>
-                <p className="text-xs text-slate-500 mt-1 mb-6 max-w-xs">
-                  Thao tác này sẽ xóa toàn bộ {vocabList.length} từ vựng và dữ liệu tiến trình học trong bộ từ này.
-                </p>
-                <div className="flex items-center gap-2">
+                <AlertTriangle size={32} className="text-rose-600 mb-3" />
+                <h3 className="text-base font-bold text-slate-900 mb-6">Xác nhận xóa bộ từ này?</h3>
+                <div className="flex items-center gap-2.5">
                   <button
                     type="button"
                     onClick={() => setShowDeleteConfirm(false)}
-                    className="py-2 px-4 text-xs font-medium text-slate-600 hover:bg-slate-50 rounded-xl"
+                    className="py-2.5 px-5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl cursor-pointer"
                   >
-                    Hủy bỏ
+                    Hủy
                   </button>
                   <button
                     type="button"
                     onClick={handleDeleteDeck}
-                    className="py-2 px-5 bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs rounded-xl shadow-sm"
+                    className="py-2.5 px-5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl cursor-pointer"
                   >
-                    Đồng ý xóa
+                    Xóa
                   </button>
                 </div>
               </div>
@@ -392,4 +430,3 @@ export function DeckDetail({
     </div>
   );
 }
-

@@ -69,107 +69,21 @@ export interface DataTableProps<TData> {
   onSelectionChange?: (selectedRows: TData[]) => void;
 }
 
-// ── Draggable Header Component ──────────────────────────────────────────
-function DraggableHeader({
-  header,
-  table,
-  activeFilterCol,
-  setActiveFilterCol,
-}: {
-  header: any;
-  table: any;
-  activeFilterCol: string | null;
-  setActiveFilterCol: (id: string | null) => void;
-}) {
-  const { attributes, listeners, transform, transition, isDragging } = useSortable({
-    id: header.id,
-  });
-
-  const style: React.CSSProperties = {
-    transform: CSS.Translate.toString(transform),
-    transition,
-    opacity: isDragging ? 0.6 : 1,
-    position: 'relative',
-    width: header.getSize(),
-  };
-
-  const isSorted = header.column.getIsSorted();
-  const isFiltered = header.column.getIsFiltered();
-
-  return (
-    <th
-      ref={header.column.columnDef.enableColumnReorder !== false ? undefined : undefined}
-      style={style}
-      className="py-3 px-4 text-left font-medium text-xs text-slate-500 uppercase tracking-wider bg-slate-50 select-none group"
-    >
-      <div className="flex items-center justify-between gap-1">
-        <div className="flex items-center gap-1.5 flex-1 min-w-0">
-          {table.options.enableColumnReorder && (
-            <span
-              {...attributes}
-              {...listeners}
-              className="cursor-grab text-slate-300 hover:text-slate-600 transition-colors"
-            >
-              <GripVertical size={13} />
-            </span>
-          )}
-          <span
-            className="truncate cursor-pointer hover:text-slate-900 transition-colors"
-            onClick={header.column.getToggleSortingHandler()}
-          >
-            {flexRender(header.column.columnDef.header, header.getContext())}
-          </span>
-          {isSorted === 'asc' && <ArrowUp size={13} className="text-blue-600" />}
-          {isSorted === 'desc' && <ArrowDown size={13} className="text-blue-600" />}
-        </div>
-
-        {/* Column Filter Popover Trigger */}
-        {header.column.getCanFilter() && (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              setActiveFilterCol(activeFilterCol === header.id ? null : header.id);
-            }}
-            className={`p-1 rounded-md transition-colors ${
-              isFiltered
-                ? 'text-blue-600 bg-blue-50'
-                : 'text-slate-300 hover:text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            <Filter size={12} />
-          </button>
-        )}
-      </div>
-
-      {/* Resize Handle */}
-      {table.options.enableColumnResizing && (
-        <div
-          onMouseDown={header.getResizeHandler()}
-          onTouchStart={header.getResizeHandler()}
-          className={`absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none touch-none hover:bg-blue-400 ${
-            header.column.getIsResizing() ? 'bg-blue-600 w-2' : ''
-          }`}
-        />
-      )}
-    </th>
-  );
-}
-
-// ── Column Filter Popover ───────────────────────────────────────────────
+// ── Column Filter Popover (Anchored directly inside <th>) ───────────────
 function ColumnFilterPopover({
   column,
   table,
+  alignRight,
   onClose,
 }: {
   column: any;
   table: any;
+  alignRight?: boolean;
   onClose: () => void;
 }) {
   const [filterSearch, setFilterSearch] = useState('');
   const popoverRef = useRef<HTMLDivElement>(null);
 
-  // Close when clicked outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (popoverRef.current && !popoverRef.current.contains(event.target as Node)) {
@@ -180,7 +94,6 @@ function ColumnFilterPopover({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [onClose]);
 
-  // Extract unique column values
   const uniqueValues = useMemo(() => {
     const values = new Set<string>();
     const rows = table.getPreFilteredRowModel().rows;
@@ -214,16 +127,20 @@ function ColumnFilterPopover({
   return (
     <div
       ref={popoverRef}
-      className="absolute top-12 left-0 z-50 w-64 bg-white rounded-xl shadow-xl p-3 border-0 text-slate-800"
-      style={{ boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1)' }}
+      onClick={(e) => e.stopPropagation()}
+      className={`filter-dropdown-menu absolute top-full mt-1.5 ${
+        alignRight ? 'right-0' : 'left-0'
+      } z-50 w-64 bg-white rounded-2xl p-3.5 text-slate-900 font-normal normal-case tracking-normal shadow-2xl`}
+      style={{ boxShadow: '0 16px 36px -6px rgba(15, 23, 42, 0.18), 0 4px 12px -2px rgba(15, 23, 42, 0.08)' }}
     >
-      <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100">
-        <span className="text-xs font-semibold text-slate-700">
+      <div className="flex items-center justify-between pb-2.5 mb-2.5">
+        <span className="text-xs font-bold text-slate-900">
           Lọc: {typeof column.columnDef.header === 'string' ? column.columnDef.header : column.id}
         </span>
         <button
+          type="button"
           onClick={onClose}
-          className="text-slate-400 hover:text-slate-600 p-0.5 rounded"
+          className="text-slate-400 hover:text-slate-800 p-1 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
         >
           <X size={14} />
         </button>
@@ -237,7 +154,7 @@ function ColumnFilterPopover({
             column.toggleSorting(false);
             onClose();
           }}
-          className="py-1 px-2 text-xs font-medium rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center gap-1 transition-colors"
+          className="py-1.5 px-2.5 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 flex items-center justify-center gap-1 transition-colors cursor-pointer"
         >
           <ArrowUp size={12} /> A-Z
         </button>
@@ -247,35 +164,35 @@ function ColumnFilterPopover({
             column.toggleSorting(true);
             onClose();
           }}
-          className="py-1 px-2 text-xs font-medium rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center gap-1 transition-colors"
+          className="py-1.5 px-2.5 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 flex items-center justify-center gap-1 transition-colors cursor-pointer"
         >
           <ArrowDown size={12} /> Z-A
         </button>
       </div>
 
       {/* Search in values */}
-      <div className="relative mb-2">
-        <Search size={12} className="absolute left-2.5 top-2.5 text-slate-400" />
+      <div className="relative mb-2.5">
+        <Search size={13} className="absolute left-2.5 top-2.5 text-slate-400" />
         <input
           type="text"
           value={filterSearch}
           onChange={(e) => setFilterSearch(e.target.value)}
           placeholder="Tìm giá trị..."
-          className="w-full pl-7 pr-2.5 py-1 text-xs bg-slate-50 rounded-lg text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          className="w-full pl-8 pr-2.5 py-1.5 text-xs bg-slate-100 rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:bg-slate-200/70"
         />
       </div>
 
       {/* Value Checkbox List */}
-      <div className="max-h-40 overflow-y-auto space-y-1 mb-2.5 pr-1">
+      <div className="max-h-44 overflow-y-auto space-y-1 mb-2 pr-1">
         {filteredValues.length === 0 ? (
-          <div className="text-xs text-slate-400 text-center py-2">Không có giá trị</div>
+          <div className="text-xs text-slate-400 text-center py-3">Không có kết quả</div>
         ) : (
           filteredValues.map((val) => {
             const isChecked = currentFilterValue.includes(val);
             return (
               <label
                 key={val}
-                className="flex items-center gap-2 px-2 py-1 rounded hover:bg-slate-50 cursor-pointer text-xs text-slate-700"
+                className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-100 cursor-pointer text-xs text-slate-800"
               >
                 <input
                   type="checkbox"
@@ -290,7 +207,6 @@ function ColumnFilterPopover({
         )}
       </div>
 
-      {/* Reset Filter Button */}
       {currentFilterValue.length > 0 && (
         <button
           type="button"
@@ -298,7 +214,7 @@ function ColumnFilterPopover({
             column.setFilterValue(undefined);
             onClose();
           }}
-          className="w-full py-1 text-xs text-rose-600 hover:bg-rose-50 rounded-lg transition-colors font-medium"
+          className="w-full py-1.5 text-xs text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-xl transition-colors font-semibold cursor-pointer"
         >
           Xóa bộ lọc cột
         </button>
@@ -307,14 +223,114 @@ function ColumnFilterPopover({
   );
 }
 
+// ── Draggable Header Component ──────────────────────────────────────────
+function DraggableHeader({
+  header,
+  table,
+  colIndex,
+  totalCols,
+  activeFilterCol,
+  setActiveFilterCol,
+}: {
+  header: any;
+  table: any;
+  colIndex: number;
+  totalCols: number;
+  activeFilterCol: string | null;
+  setActiveFilterCol: (id: string | null) => void;
+}) {
+  const { attributes, listeners, transform, transition, isDragging } = useSortable({
+    id: header.id,
+  });
+
+  const style: React.CSSProperties = {
+    transform: CSS.Translate.toString(transform),
+    transition,
+    opacity: isDragging ? 0.6 : 1,
+    position: 'relative',
+    width: header.getSize(),
+  };
+
+  const isSorted = header.column.getIsSorted();
+  const isFiltered = header.column.getIsFiltered();
+  const isFilterOpen = activeFilterCol === header.id;
+
+  return (
+    <th
+      style={style}
+      className="py-3.5 px-4 text-left font-bold text-xs text-slate-700 uppercase tracking-wider bg-slate-200/75 select-none group first:rounded-tl-2xl last:rounded-tr-2xl"
+    >
+      <div className="flex items-center justify-between gap-1">
+        <div className="flex items-center gap-1.5 flex-1 min-w-0">
+          {table.options.enableColumnReorder && (
+            <span
+              {...attributes}
+              {...listeners}
+              className="cursor-grab text-slate-400 hover:text-slate-700 transition-colors"
+            >
+              <GripVertical size={13} />
+            </span>
+          )}
+          <span
+            className="truncate cursor-pointer hover:text-slate-950 transition-colors"
+            onClick={header.column.getToggleSortingHandler()}
+          >
+            {flexRender(header.column.columnDef.header, header.getContext())}
+          </span>
+          {isSorted === 'asc' && <ArrowUp size={13} className="text-blue-600 shrink-0" />}
+          {isSorted === 'desc' && <ArrowDown size={13} className="text-blue-600 shrink-0" />}
+        </div>
+
+        {header.column.getCanFilter() && (
+          <button
+            type="button"
+            title="Lọc cột"
+            onClick={(e) => {
+              e.stopPropagation();
+              setActiveFilterCol(isFilterOpen ? null : header.id);
+            }}
+            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+              isFiltered || isFilterOpen
+                ? 'text-blue-600 bg-blue-100'
+                : 'text-slate-600 hover:text-slate-950 hover:bg-slate-300/70'
+            }`}
+          >
+            <Filter size={12} />
+          </button>
+        )}
+      </div>
+
+      {/* Filter Popover anchored right inside this <th> */}
+      {isFilterOpen && (
+        <ColumnFilterPopover
+          column={header.column}
+          table={table}
+          alignRight={colIndex >= totalCols - 2}
+          onClose={() => setActiveFilterCol(null)}
+        />
+      )}
+
+      {table.options.enableColumnResizing && (
+        <div
+          onMouseDown={header.getResizeHandler()}
+          onTouchStart={header.getResizeHandler()}
+          className={`absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none touch-none hover:bg-blue-500 ${
+            header.column.getIsResizing() ? 'bg-blue-600 w-2' : ''
+          }`}
+        />
+      )}
+    </th>
+  );
+}
+
 // ── Main DataTable Component ────────────────────────────────────────────
 export function DataTable<TData>({
   data,
   columns,
   loading = false,
-  loadingMessage = 'Đang tải dữ liệu...',
+  loadingMessage = 'Đang tải...',
   emptyMessage = 'Không có dữ liệu',
-  pageSize = 20, // Mandatory Strict 20 Rows / Page
+  pageSize = 20,
   showPagination = true,
   enableGlobalSearch = true,
   enableColumnVisibility = true,
@@ -322,7 +338,7 @@ export function DataTable<TData>({
   enableColumnResizing = true,
   enableColumnReorder = true,
   enableExport = true,
-  searchPlaceholder = 'Tìm kiếm từ vựng, phiên âm...',
+  searchPlaceholder = 'Tìm kiếm...',
   toolbarLeft,
   toolbarRight,
   exportFilename = 'vocab_export',
@@ -341,7 +357,6 @@ export function DataTable<TData>({
   const [showColPicker, setShowColPicker] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
 
-  // DnD Sensors
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor)
@@ -358,10 +373,22 @@ export function DataTable<TData>({
     }
   }
 
-  // TanStack Table Instance
+  // Custom multi-select array filter function for column checkbox filters
+  const defaultColumn = useMemo(
+    () => ({
+      filterFn: (row: any, columnId: string, filterValue: any) => {
+        if (!filterValue || !Array.isArray(filterValue) || filterValue.length === 0) return true;
+        const rowVal = String(row.getValue(columnId) ?? '');
+        return filterValue.includes(rowVal);
+      },
+    }),
+    []
+  );
+
   const table = useReactTable({
     data,
     columns,
+    defaultColumn,
     state: {
       globalFilter,
       sorting,
@@ -372,7 +399,7 @@ export function DataTable<TData>({
     },
     initialState: {
       pagination: {
-        pageSize: 20, // STRICT 20 ROWS PER PAGE (RULE 2)
+        pageSize: 20,
       },
     },
     onGlobalFilterChange: setGlobalFilter,
@@ -389,7 +416,6 @@ export function DataTable<TData>({
     columnResizeMode: 'onChange',
   });
 
-  // Notify selection change
   useEffect(() => {
     if (onSelectionChange) {
       const selectedRows = table.getSelectedRowModel().rows.map((r) => r.original);
@@ -397,7 +423,6 @@ export function DataTable<TData>({
     }
   }, [rowSelection, table, onSelectionChange]);
 
-  // Excel Export Handler
   const handleExportExcel = () => {
     const visibleRows = table.getFilteredRowModel().rows.map((r) => r.original);
     const worksheet = XLSX.utils.json_to_sheet(visibleRows);
@@ -407,7 +432,6 @@ export function DataTable<TData>({
     setShowExportMenu(false);
   };
 
-  // PDF Export Handler
   const handleExportPDF = () => {
     const doc = new jsPDF();
     const visibleCols = table.getVisibleLeafColumns().filter((c) => c.id !== 'actions' && c.id !== 'select');
@@ -426,67 +450,64 @@ export function DataTable<TData>({
   };
 
   return (
-    <div className="w-full flex flex-col space-y-4">
+    <div className="w-full flex flex-col space-y-3">
       {/* ── Toolbar ─────────────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-        {/* Left Toolbar Slots & Global Search */}
         <div className="flex items-center gap-2.5 flex-1">
           {toolbarLeft}
 
           {enableGlobalSearch && (
             <div className="relative flex-1 max-w-sm">
-              <Search size={14} className="absolute left-3 top-3 text-slate-400" />
+              <Search size={15} className="absolute left-3.5 top-2.5 text-slate-500" />
               <input
                 type="text"
                 value={globalFilter ?? ''}
                 onChange={(e) => setGlobalFilter(e.target.value)}
                 placeholder={searchPlaceholder}
-                className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 hover:bg-slate-100/70 focus:bg-white text-slate-900 rounded-xl transition-all focus:outline-none focus:ring-1 focus:ring-slate-400 placeholder:text-slate-400"
+                className="w-full pl-9 pr-8 py-2 text-xs font-medium bg-white hover:bg-slate-50 focus:bg-white text-slate-900 rounded-xl shadow-xs transition-all focus:outline-none focus:ring-2 focus:ring-slate-900 placeholder:text-slate-400"
               />
               {globalFilter && (
                 <button
                   type="button"
                   onClick={() => setGlobalFilter('')}
-                  className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 p-0.5"
+                  className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-700 p-0.5 cursor-pointer"
                 >
-                  <X size={12} />
+                  <X size={13} />
                 </button>
               )}
             </div>
           )}
         </div>
 
-        {/* Right Toolbar Slots: Column Visibility & Export */}
         <div className="flex items-center gap-2 justify-end">
           {toolbarRight}
 
-          {/* Column Visibility Dropdown */}
           {enableColumnVisibility && (
             <div className="relative">
               <button
                 type="button"
-                onClick={() => setShowColPicker(!showColPicker)}
-                className="py-2 px-3 text-xs font-medium bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-xl flex items-center gap-1.5 transition-colors"
+                onClick={() => {
+                  setShowColPicker(!showColPicker);
+                  setShowExportMenu(false);
+                }}
+                className="py-2 px-3.5 text-xs font-semibold bg-white hover:bg-slate-200/70 text-slate-800 rounded-xl shadow-xs flex items-center gap-1.5 transition-colors cursor-pointer"
               >
-                <Eye size={13} className="text-slate-400" />
+                <Eye size={14} className="text-slate-600" />
                 <span>Cột</span>
               </button>
 
               {showColPicker && (
                 <div
-                  className="absolute right-0 top-11 z-50 w-48 bg-white rounded-xl shadow-xl p-2.5 text-slate-800"
-                  style={{ boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)' }}
+                  className="absolute right-0 top-full mt-1.5 z-50 w-48 bg-white rounded-2xl shadow-2xl p-3 text-slate-800"
+                  style={{ boxShadow: '0 16px 36px -6px rgba(15, 23, 42, 0.18)' }}
                 >
-                  <div className="text-xs font-semibold text-slate-700 pb-1.5 mb-1.5 border-b border-slate-100">
-                    Hiển thị cột
-                  </div>
-                  <div className="space-y-1 max-h-48 overflow-y-auto">
+                  <div className="space-y-1 max-h-52 overflow-y-auto">
                     {table.getAllLeafColumns().map((column) => {
                       if (column.id === 'actions' || column.id === 'select') return null;
                       return (
                         <label
                           key={column.id}
-                          className="flex items-center gap-2 px-2 py-1 rounded hover:bg-slate-50 text-xs text-slate-700 cursor-pointer"
+                          className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-100 text-xs font-medium text-slate-800 cursor-pointer"
                         >
                           <input
                             type="checkbox"
@@ -508,36 +529,38 @@ export function DataTable<TData>({
             </div>
           )}
 
-          {/* Export Dropdown */}
           {enableExport && (
             <div className="relative">
               <button
                 type="button"
-                onClick={() => setShowExportMenu(!showExportMenu)}
-                className="py-2 px-3 text-xs font-medium bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-xl flex items-center gap-1.5 transition-colors"
+                onClick={() => {
+                  setShowExportMenu(!showExportMenu);
+                  setShowColPicker(false);
+                }}
+                className="py-2 px-3.5 text-xs font-semibold bg-white hover:bg-slate-200/70 text-slate-800 rounded-xl shadow-xs flex items-center gap-1.5 transition-colors cursor-pointer"
               >
-                <Download size={13} className="text-slate-400" />
+                <Download size={14} className="text-slate-600" />
                 <span>Xuất file</span>
               </button>
 
               {showExportMenu && (
                 <div
-                  className="absolute right-0 top-11 z-50 w-36 bg-white rounded-xl shadow-xl p-1.5 text-slate-800"
-                  style={{ boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)' }}
+                  className="absolute right-0 top-full mt-1.5 z-50 w-40 bg-white rounded-2xl shadow-2xl p-1.5 text-slate-800"
+                  style={{ boxShadow: '0 16px 36px -6px rgba(15, 23, 42, 0.18)' }}
                 >
                   <button
                     type="button"
                     onClick={handleExportExcel}
-                    className="w-full text-left py-1.5 px-2.5 text-xs text-slate-700 hover:bg-slate-50 rounded-lg transition-colors"
+                    className="w-full text-left py-2 px-3 text-xs font-medium text-slate-800 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
                   >
-                    Xuất Excel (.xlsx)
+                    Excel (.xlsx)
                   </button>
                   <button
                     type="button"
                     onClick={handleExportPDF}
-                    className="w-full text-left py-1.5 px-2.5 text-xs text-slate-700 hover:bg-slate-50 rounded-lg transition-colors"
+                    className="w-full text-left py-2 px-3 text-xs font-medium text-slate-800 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
                   >
-                    Xuất PDF (.pdf)
+                    PDF (.pdf)
                   </button>
                 </div>
               )}
@@ -547,22 +570,23 @@ export function DataTable<TData>({
       </div>
 
       {/* ── Table Container ───────────────────────────────────────────── */}
-      <div className="w-full overflow-x-auto rounded-2xl bg-white">
+      <div className="w-full bg-white rounded-2xl shadow-xs overflow-visible">
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <table className="w-full text-left border-collapse">
             <thead>
               {table.getHeaderGroups().map((headerGroup) => (
                 <tr key={headerGroup.id}>
                   <SortableContext items={columnOrder} strategy={horizontalListSortingStrategy}>
-                    {headerGroup.headers.map((header) => (
-                      <React.Fragment key={header.id}>
-                        <DraggableHeader
-                          header={header}
-                          table={table}
-                          activeFilterCol={activeFilterCol}
-                          setActiveFilterCol={setActiveFilterCol}
-                        />
-                      </React.Fragment>
+                    {headerGroup.headers.map((header, idx) => (
+                      <DraggableHeader
+                        key={header.id}
+                        header={header}
+                        table={table}
+                        colIndex={idx}
+                        totalCols={headerGroup.headers.length}
+                        activeFilterCol={activeFilterCol}
+                        setActiveFilterCol={setActiveFilterCol}
+                      />
                     ))}
                   </SortableContext>
                 </tr>
@@ -571,13 +595,13 @@ export function DataTable<TData>({
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={columns.length} className="text-center py-12 text-xs text-slate-400">
+                  <td colSpan={columns.length} className="text-center py-12 text-xs text-slate-500">
                     {loadingMessage}
                   </td>
                 </tr>
               ) : table.getRowModel().rows.length === 0 ? (
                 <tr>
-                  <td colSpan={columns.length} className="text-center py-12 text-xs text-slate-400">
+                  <td colSpan={columns.length} className="text-center py-12 text-xs text-slate-500">
                     {emptyMessage}
                   </td>
                 </tr>
@@ -586,12 +610,12 @@ export function DataTable<TData>({
                   <tr
                     key={row.id}
                     onClick={() => onRowClick && onRowClick(row.original)}
-                    className={`transition-colors duration-150 ${
+                    className={`transition-colors duration-100 ${
                       onRowClick ? 'cursor-pointer' : ''
-                    } ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'} hover:bg-slate-100/60`}
+                    } ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-100/70'} hover:bg-blue-50/60`}
                   >
                     {row.getVisibleCells().map((cell) => (
-                      <td key={cell.id} className="py-3 px-4 text-xs text-slate-700">
+                      <td key={cell.id} className="py-3.5 px-4 text-xs text-slate-800">
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </td>
                     ))}
@@ -603,47 +627,35 @@ export function DataTable<TData>({
         </DndContext>
       </div>
 
-      {/* Active Column Filter Dropdown Position Anchor */}
-      {activeFilterCol && (
-        <ColumnFilterPopover
-          column={table.getColumn(activeFilterCol)}
-          table={table}
-          onClose={() => setActiveFilterCol(null)}
-        />
-      )}
-
       {/* ── Strict 20 Rows / Page Pagination ─────────────────────────── */}
       {showPagination && (
-        <div className="flex items-center justify-between pt-2 px-1 text-xs text-slate-500">
+        <div className="flex items-center justify-between pt-2 px-1 text-xs text-slate-600">
           <div>
-            Hiển thị{' '}
-            <span className="font-semibold text-slate-800">
+            <span className="font-bold text-slate-900">
               {table.getRowModel().rows.length > 0
                 ? table.getState().pagination.pageIndex * 20 + 1
                 : 0}
-            </span>{' '}
-            đến{' '}
-            <span className="font-semibold text-slate-800">
+              –
               {Math.min(
                 (table.getState().pagination.pageIndex + 1) * 20,
                 table.getFilteredRowModel().rows.length
               )}
             </span>{' '}
-            trong <span className="font-semibold text-slate-800">{table.getFilteredRowModel().rows.length}</span> từ
+            / <span className="font-bold text-slate-900">{table.getFilteredRowModel().rows.length}</span>
           </div>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => table.previousPage()}
               disabled={!table.getCanPreviousPage()}
-              className="py-1.5 px-3 bg-slate-50 hover:bg-slate-100 disabled:opacity-30 disabled:pointer-events-none rounded-xl text-slate-700 font-medium transition-colors flex items-center gap-1"
+              className="py-2 px-3.5 bg-white hover:bg-slate-200/70 disabled:opacity-30 disabled:pointer-events-none rounded-xl shadow-xs text-slate-800 font-semibold transition-colors flex items-center gap-1 cursor-pointer"
             >
-              <ChevronLeft size={13} />
+              <ChevronLeft size={14} />
               <span>Trước</span>
             </button>
 
-            <span className="px-3 py-1.5 font-medium text-slate-700">
+            <span className="px-3 py-1.5 font-bold text-slate-800">
               Trang {table.getState().pagination.pageIndex + 1} / {Math.max(1, table.getPageCount())}
             </span>
 
@@ -651,10 +663,10 @@ export function DataTable<TData>({
               type="button"
               onClick={() => table.nextPage()}
               disabled={!table.getCanNextPage()}
-              className="py-1.5 px-3 bg-slate-50 hover:bg-slate-100 disabled:opacity-30 disabled:pointer-events-none rounded-xl text-slate-700 font-medium transition-colors flex items-center gap-1"
+              className="py-2 px-3.5 bg-white hover:bg-slate-200/70 disabled:opacity-30 disabled:pointer-events-none rounded-xl shadow-xs text-slate-800 font-semibold transition-colors flex items-center gap-1 cursor-pointer"
             >
               <span>Sau</span>
-              <ChevronRight size={13} />
+              <ChevronRight size={14} />
             </button>
           </div>
         </div>
@@ -662,4 +674,3 @@ export function DataTable<TData>({
     </div>
   );
 }
-

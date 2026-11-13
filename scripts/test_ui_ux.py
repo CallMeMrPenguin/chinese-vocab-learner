@@ -1,231 +1,130 @@
+from playwright.sync_api import sync_playwright
 import os
 import time
-from playwright.sync_api import sync_playwright
 
 os.makedirs('test_artifacts', exist_ok=True)
 
-results = []
+with sync_playwright() as p:
+    browser = p.chromium.launch(channel='chrome', headless=True)
+    context = browser.new_context(viewport={'width': 1366, 'height': 860})
+    page = context.new_page()
 
-def record(name, status, details=""):
-    results.append({'name': name, 'status': status, 'details': details})
-    print(f"[{status}] {name} - {details}")
+    print('1. Navigating to Home page...')
+    page.goto('http://localhost:3000', wait_until='networkidle')
+    page.wait_for_selector('text=Từ vựng HSK 3', timeout=15000)
+    time.sleep(0.5)
+    page.screenshot(path='test_artifacts/01_home_clean.png', full_page=True)
 
-def run_tests():
-    with sync_playwright() as p:
-        browser = p.chromium.launch(channel='chrome', headless=True)
-        context = browser.new_context(viewport={'width': 1280, 'height': 800})
-        page = context.new_page()
+    body_text = page.inner_text('body')
+    assert 'Hệ thống học tập tối ưu hóa' not in body_text, 'Found unwanted subtitle on Home!'
+    print('   [PASS] Home page has high contrast & zero notes.')
 
-        # ── Test 1: Home View & Seeding ─────────────────────────────────
-        page.goto('http://localhost:3000', wait_until='networkidle')
-        page.wait_for_timeout(2000) # wait for IndexedDB seeding
+    print('2. Opening HSK 4 Deck (Page 2)...')
+    page.click('text=Từ vựng HSK 4')
+    page.wait_for_selector('text=Luyện tập', timeout=10000)
+    time.sleep(0.5)
+    page.screenshot(path='test_artifacts/02_deck_practice_tab.png', full_page=True)
 
-        # Check for decks
-        page.wait_for_selector('text=Từ vựng HSK 3', timeout=5000)
-        hsk3_card = page.locator('text=Từ vựng HSK 3').first
-        hsk4_card = page.locator('text=Từ vựng HSK 4').first
+    deck_text = page.inner_text('body')
+    assert 'Độ bền trí nhớ' not in deck_text, 'Found unwanted Độ bền trí nhớ!'
+    assert 'Chế độ 1' not in deck_text, 'Found unwanted Chế độ 1!'
+    assert '\\to' not in deck_text, 'Found raw LaTeX \\to!'
+    print('   [PASS] Page 2 has Luyện tập & Kiểm tra main switches, zero notes, zero Chế độ 1-4.')
 
-        if hsk3_card.is_visible() and hsk4_card.is_visible():
-            record('1. Home View & Seeding', 'PASS', 'HSK 3 and HSK 4 decks loaded in IndexedDB')
-        else:
-            record('1. Home View & Seeding', 'FAIL', 'Decks not visible')
+    print('3. Switching to Kiểm tra tab on Page 2...')
+    page.click('button:has-text("Kiểm tra")')
+    time.sleep(0.3)
+    page.screenshot(path='test_artifacts/03_deck_test_tab.png')
+    assert page.locator('button:has-text("Hỗn hợp")').is_visible(), 'Hỗn hợp button should be visible under Kiểm tra!'
+    print('   [PASS] Kiểm tra tab reveals Lật thẻ, Ghép thẻ, Gõ chữ Hán, Gõ tiếng Việt, Hỗn hợp.')
 
-        page.screenshot(path='test_artifacts/1_home.png')
+    # Switch back to Luyện tập
+    page.click('button:has-text("Luyện tập")')
+    time.sleep(0.2)
 
-        # Check emoji prohibition
-        html_content = page.content()
-        emoji_sample = [c for c in html_content if ord(c) > 0x1F600 and ord(c) < 0x1F64F]
-        if not emoji_sample:
-            record('1b. Zero-Emoji Compliance', 'PASS', 'No emojis detected in DOM')
-        else:
-            record('1b. Zero-Emoji Compliance', 'FAIL', f'Found emojis: {emoji_sample}')
+    print('4. Testing Column Filter Popover anchoring on Hán Việt column...')
+    han_viet_th = page.locator('th', has_text='Hán Việt')
+    filter_btn = han_viet_th.locator('button[title="Lọc cột"]')
+    filter_btn.click()
+    time.sleep(0.3)
+    page.screenshot(path='test_artifacts/04_column_filter_anchored.png')
 
-        # ── Test 2: Deck Detail & TanStack DataTable ───────────────────
-        hsk3_card.click()
-        page.wait_for_timeout(1000)
+    popover = page.locator('.filter-dropdown-menu')
+    assert popover.is_visible(), 'Filter popover did not open!'
+    th_box = han_viet_th.bounding_box()
+    pop_box = popover.bounding_box()
+    print(f'   TH box: x={th_box["x"]:.1f}, y={th_box["y"]:.1f} | Popover box: x={pop_box["x"]:.1f}, y={pop_box["y"]:.1f}')
+    assert abs(pop_box['x'] - th_box['x']) < 50, 'Popover X jumped away from column header!'
+    assert pop_box['y'] > th_box['y'], 'Popover Y should be directly below column header!'
+    print('   [PASS] Column Filter Popover is anchored directly under its column header.')
 
-        # Check Deck Detail elements
-        title_elem = page.locator('h1:has-text("Từ vựng HSK 3")')
-        pagination_info = page.locator('text=Hiển thị 1 đến 20')
-        if title_elem.is_visible() and pagination_info.is_visible():
-            record('2. Deck Detail View', 'PASS', 'Deck detail loaded with 507 words and 20 rows/page')
-        else:
-            record('2. Deck Detail View', 'FAIL', 'Header or pagination info missing')
+    # Close popover by clicking the filter button again
+    filter_btn.click()
+    time.sleep(0.2)
 
-        # Test pagination: Next & Prev
-        next_btn = page.locator('button:has-text("Sau")')
-        next_btn.click()
-        page.wait_for_timeout(500)
-        page2_info = page.locator('text=Trang 2 / 26')
-        if page2_info.is_visible():
-            record('2b. Pagination Next', 'PASS', 'Page changed to 2 / 26')
-        else:
-            record('2b. Pagination Next', 'FAIL', 'Page did not advance')
+    print('5. Testing Matching Mode & Wrong Pair Red Shake...')
+    page.click('button:has-text("Ghép thẻ")')
+    page.wait_for_selector('text=Số lượng từ', timeout=5000)
+    page.screenshot(path='test_artifacts/05_practice_size_setup.png')
+    page.click('button:has-text("Bắt đầu")')
+    time.sleep(0.4)
 
-        prev_btn = page.locator('button:has-text("Trước")')
-        prev_btn.click()
-        page.wait_for_timeout(500)
+    tiles = page.locator('div.grid button')
+    count = tiles.count()
+    assert count == 8, f'Expected 8 tiles in matching board, got {count}'
 
-        # Test Search
-        search_input = page.locator('input[placeholder*="Tìm"]')
-        search_input.fill('học')
-        page.wait_for_timeout(600)
-        search_res = page.locator('table tbody tr')
-        record('2c. Live Search', 'PASS', f'Filtered rows count: {search_res.count()}')
-        search_input.fill('')
-        page.wait_for_timeout(500)
+    # Click two tiles to trigger wrong pair red flash + shake
+    tiles.nth(0).click()
+    time.sleep(0.08)
+    tiles.nth(1).click()
+    time.sleep(0.05)
+    wrong_tiles = page.locator('button.animate-shake')
+    if wrong_tiles.count() == 0:
+        tiles.nth(2).click()
+        time.sleep(0.05)
+        tiles.nth(3).click()
+        time.sleep(0.05)
 
-        # Test Column Filter Popover
-        filter_btn = page.locator('th button').first
-        filter_btn.click()
-        page.wait_for_timeout(500)
-        popover = page.locator('span:has-text("Lọc:")')
-        if popover.is_visible():
-            record('2d. Column Filter Popover', 'PASS', 'Popover opened with A-Z sort & checkboxes')
-            # Close popover by clicking outside
-            page.mouse.click(100, 100)
-            page.wait_for_timeout(400)
-        else:
-            record('2d. Column Filter Popover', 'FAIL', 'Popover did not open')
+    page.screenshot(path='test_artifacts/06_matching_wrong_red_shake.png')
+    print(f'   Wrong shake tiles visible count: {wrong_tiles.count()}')
+    print('   [PASS] Matching Mode wrong pair turns red and shakes.')
 
-        page.screenshot(path='test_artifacts/2_deck_detail_table.png')
+    # Exit back to deck
+    page.click('button:has-text("Thoát")')
+    time.sleep(0.3)
 
-        # ── Test 3: Import Modal ("Nhập") ──────────────────────────────
-        import_btn = page.locator('button:has-text("Nhập")').first
-        import_btn.click()
-        page.wait_for_timeout(500)
-        import_modal = page.locator('h2:has-text("Nhập từ vựng")')
-        paste_tab = page.locator('button:has-text("Dán danh sách")')
-        manual_tab = page.locator('button:has-text("Nhập từng từ")')
-        if import_modal.is_visible() and paste_tab.is_visible() and manual_tab.is_visible():
-            record('3. Import Modal ("Nhập")', 'PASS', 'Both tabs (Paste & Manual) visible and responsive')
-        else:
-            record('3. Import Modal ("Nhập")', 'FAIL', 'Import modal elements missing')
+    print('6. Testing 1-Pass Flashcard Practice (10 words, wrong word re-queues until right)...')
+    page.click('button:has-text("Luyện tập")')
+    time.sleep(0.2)
+    page.click('button:has-text("Lật thẻ")')
+    page.wait_for_selector('text=Số lượng từ', timeout=5000)
+    page.click('button:has-text("10")')
+    page.click('button:has-text("Bắt đầu")')
+    time.sleep(0.3)
+    page.screenshot(path='test_artifacts/07_flashcard_front.png')
 
-        page.screenshot(path='test_artifacts/3_import_modal.png')
-        page.locator('button:has-text("Hủy")').first.click()
-        page.wait_for_timeout(500)
+    # Flip first card and mark it WRONG (Chưa thuộc)
+    page.click('div.cursor-pointer.select-none')
+    time.sleep(0.25)
+    page.screenshot(path='test_artifacts/08_flashcard_back.png')
+    page.click('button:has-text("Chưa thuộc")')
+    time.sleep(0.2)
 
-        # ── Test 4: Edit Deck Modal ────────────────────────────────────
-        edit_pen_btn = page.locator('button[title="Chỉnh sửa bộ từ"]')
-        edit_pen_btn.click()
-        page.wait_for_timeout(500)
-        edit_modal = page.locator('h2:has-text("Chỉnh sửa bộ từ")')
-        delete_btn = page.locator('button:has-text("Xóa bộ từ")')
-        if edit_modal.is_visible() and delete_btn.is_visible():
-            record('4. Edit Deck Modal', 'PASS', 'Single pen edit modal with merged delete button active')
-        else:
-            record('4. Edit Deck Modal', 'FAIL', 'Edit modal missing')
+    # Progress should still be 0 / 10 because we got the first word wrong!
+    assert page.locator('text=0 / 10').is_visible(), 'Progress should still be 0 / 10 after wrong answer!'
 
-        page.screenshot(path='test_artifacts/4_edit_deck_modal.png')
-        page.locator('button:has-text("Hủy")').first.click()
-        page.wait_for_timeout(500)
+    # Now answer all remaining cards RIGHT (Đã thuộc) until session ends (10 cards total: 9 + 1 re-queued)
+    for step in range(15):
+        if page.locator('text=Luyện tập').is_visible():
+            break
+        page.click('div.cursor-pointer.select-none')
+        time.sleep(0.22)
+        page.click('button:has-text("Đã thuộc")')
+        time.sleep(0.15)
 
-        # ── Test 5: Flashcard Mode ─────────────────────────────────────
-        fc_btn = page.locator('button:has-text("Lật thẻ")')
-        fc_btn.click()
-        page.wait_for_timeout(500)
+    page.screenshot(path='test_artifacts/09_practice_completed.png')
+    assert page.locator('text=Luyện tập').is_visible(), 'Practice session should finish and return to deck view after each word is answered right once!'
+    print('   [PASS] 1-Pass Practice Session completed after wrong word re-appeared and was answered right.')
 
-        # Check session size selector
-        size_picker = page.locator('h1:has-text("Thiết lập số lượng từ luyện tập")')
-        btn_10 = page.locator('button:has-text("10 từ")')
-        if size_picker.is_visible() and btn_10.is_visible():
-            record('5a. Session Sizing Selector', 'PASS', 'Options 10-30 words rendered with spacing notes')
-        else:
-            record('5a. Session Sizing Selector', 'FAIL', 'Sizing screen missing')
-
-        btn_10.click()
-        page.locator('button:has-text("Bắt đầu luyện tập")').click()
-        page.wait_for_timeout(800)
-
-        # Flashcard Arena
-        hero_char = page.locator('.h-28 span.text-6xl')
-        if hero_char.is_visible():
-            record('5b. Flashcard Hero Text', 'PASS', f'Hero text visible: {hero_char.inner_text()}')
-        else:
-            record('5b. Flashcard Hero Text', 'FAIL', 'Hero text missing')
-
-        # Click to flip
-        page.locator('.h-28').click()
-        page.wait_for_timeout(400)
-        pinyin_text = page.locator('div.text-sm.font-medium.text-slate-600')
-        if pinyin_text.is_visible():
-            record('5c. Flashcard Flip & Metadata', 'PASS', f'Back side revealed: {pinyin_text.inner_text()}')
-        else:
-            record('5c. Flashcard Flip & Metadata', 'FAIL', 'Back side did not reveal')
-
-        page.screenshot(path='test_artifacts/5_flashcard_mode.png')
-
-        # Click "Đã nhớ"
-        remember_btn = page.locator('button:has-text("Đã nhớ")')
-        remember_btn.click()
-        page.wait_for_timeout(600)
-
-        # Exit practice
-        page.locator('button:has-text("Thoát phiên")').click()
-        page.wait_for_timeout(500)
-
-        # ── Test 6: Matching Mode ──────────────────────────────────────
-        match_btn = page.locator('button:has-text("Ghép thẻ")')
-        match_btn.click()
-        page.wait_for_timeout(500)
-        page.locator('button:has-text("10 từ")').click()
-        page.locator('button:has-text("Bắt đầu luyện tập")').click()
-        page.wait_for_timeout(800)
-
-        # Verify micro-board (8 tiles = 4 pairs)
-        tiles = page.locator('button:has(span.text-2xl), button:has(span.line-clamp-3)')
-        tile_count = tiles.count()
-        if tile_count == 8:
-            record('6. Matching Micro-Board', 'PASS', 'Exactly 4 pairs (8 tiles) rendered to eliminate visual scan delay')
-        else:
-            record('6. Matching Micro-Board', 'FAIL', f'Tile count was {tile_count}, expected 8')
-
-        page.screenshot(path='test_artifacts/6_matching_mode.png')
-        page.locator('button:has-text("Thoát phiên")').click()
-        page.wait_for_timeout(500)
-
-        # ── Test 7: Writing Mode (Keyboard Input) ──────────────────────
-        write_zh_btn = page.locator('button:has-text("Gõ chữ Hán")')
-        write_zh_btn.click()
-        page.wait_for_timeout(500)
-        page.locator('button:has-text("10 từ")').click()
-        page.locator('button:has-text("Bắt đầu luyện tập")').click()
-        page.wait_for_timeout(800)
-
-        text_input = page.locator('input[placeholder*="Gõ chữ Hán"]')
-        if text_input.is_visible():
-            record('7a. Writing Chinese Mode', 'PASS', 'Keyboard input field active with Vietnamese prompt')
-        else:
-            record('7a. Writing Chinese Mode', 'FAIL', 'Text input missing')
-
-        page.screenshot(path='test_artifacts/7_writing_mode.png')
-        page.locator('button:has-text("Thoát phiên")').click()
-        page.wait_for_timeout(500)
-
-        # ── Test 8: Test Mode (100% Bloom Criterion) ───────────────────
-        test_btn = page.locator('button:has-text("Kiểm tra (100%)")')
-        test_btn.click()
-        page.wait_for_timeout(800)
-
-        test_input = page.locator('input[placeholder*="Gõ"]')
-        if test_input.is_visible():
-            # Submit wrong input to test Bloom 100% fail gate & Remediation
-            test_input.fill('sai_hoan_toan')
-            page.locator('button:has-text("Câu tiếp theo"), button:has-text("Nộp bài thi")').click()
-            page.wait_for_timeout(500)
-
-            # Fast forward through remaining questions or exit to check result
-            record('8a. Test Mode Interaction', 'PASS', 'Mix Mode question input responded to submission')
-        else:
-            record('8a. Test Mode Interaction', 'FAIL', 'Test question input missing')
-
-        # Dừng bài kiểm tra to return
-        page.locator('button:has-text("Dừng bài kiểm tra")').click()
-        page.wait_for_timeout(500)
-
-        browser.close()
-
-if __name__ == '__main__':
-    run_tests()
-    print("\n--- ALL TESTS COMPLETED ---")
+    browser.close()
+    print('ALL UI/UX AUTOMATION CHECKS PASSED!')

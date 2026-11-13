@@ -145,8 +145,24 @@ for page in doc4:
                 rest = rest[1:]
             clean_hz = re.sub(r'\d+$', '', raw_hz).strip()
             pinyin = clean_pinyin(rest[0] if len(rest) > 0 else '')
-            pos = rest[1] if len(rest) > 1 else ''
-            meaning = ' '.join(rest[2:]) if len(rest) > 2 else ''
+            POS_PREFIXES = (
+                'Danh', 'Động', 'Tính', 'Phó', 'Đại', 'Liên', 'Giới',
+                'Lượng', 'Trợ', 'Thán', 'Số', 'Cụm', 'Thành', 'Quán', 'Từ'
+            )
+            if len(rest) > 2 and rest[1].startswith(POS_PREFIXES):
+                pos = rest[1]
+                meaning = ' '.join(rest[2:])
+                # Clean wrapped POS fragments at the start of meaning (e.g. "từ/Danh từ ...", "từ ...")
+                m_wrap = re.match(r'^((?:từ|ngữ)(?:\s*/\s*(?:Danh|Động|Tính|Phó|Đại|Liên|Giới|Lượng|Trợ|Thán|Số)\s*từ)*)\s+(.*)', meaning, flags=re.IGNORECASE)
+                if m_wrap:
+                    pos = f"{pos} {m_wrap.group(1)}".strip()
+                    meaning = m_wrap.group(2).strip()
+            elif len(rest) == 2 and not rest[1].startswith(POS_PREFIXES):
+                pos = 'Từ vựng'
+                meaning = rest[1]
+            else:
+                pos = rest[1] if len(rest) > 2 else 'Từ vựng'
+                meaning = ' '.join(rest[2:]) if len(rest) > 2 else (rest[1] if len(rest) > 1 else '')
             am_han_viet = get_hanviet(clean_hz)
             hsk4_words.append({
                 'id': f'hsk4_{stt}',

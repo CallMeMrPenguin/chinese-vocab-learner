@@ -71,69 +71,45 @@ When creating or editing any deck, the learner has full control over:
 
 ## 4. Practice Sizing & Progression Logic
 
-### 4.1 Variable Session Sizing (10 to 30 Words)
+### 4.1 Practice Session Flow & Single-Pass Mastery Per Run
 
-Learners select their active batch size $N \in [10, 30]$ via a minimal flat selector (10, 15, 20, 25, 30).
-
-#### A. In-Session Spacing Calculation
-When an error occurs during practice, the failed item is re-inserted after $S_{\text{gap}}$ intervening cards:
-
-$$S_{\text{gap}} = \max\left(3, \left\lfloor \frac{N}{4} \right\rfloor\right)$$
-
-* At $N = 10 \implies S_{\text{gap}} = 3$ cards apart.
-* At $N = 20 \implies S_{\text{gap}} = 5$ cards apart.
-* At $N = 30 \implies S_{\text{gap}} = 7$ cards apart.
-
-#### B. The 70/30 Rolling Snowball
-For decks with multiple batches, subsequent sessions automatically draw:
-* $N_{\text{new}} = \lceil 0.70 \times N \rceil$ (new words from the unlearned queue).
-* $N_{\text{review}} = N - N_{\text{new}}$ (words with lowest retrievability $R(t)$ from previously practiced batches).
-
-#### C. Session Completion Gate & Atomic Session Resume
-* A session of $N$ words terminates only when **every single word has reached the clean pass target**. If errors occur, the session extends dynamically until all $N$ words are verified clean.
-* **Atomic Session Resume**: Every card interaction immediately persists the active queue state. Closing or refreshing the browser mid-session (e.g. at card 27/30) resumes directly at card 27/30 upon return.
+1. **Page 2 Main Mode Switcher (`Luyện tập` & `Kiểm tra`)**:
+   * Entering a deck presents two top-level mode switches: **Luyện tập** (Practice) and **Kiểm tra** (Test), revealing clean mode buttons (`Lật thẻ`, `Ghép thẻ`, `Gõ chữ Hán`, `Gõ tiếng Việt`, plus `Hỗn hợp` in Test mode) without any "Chế độ 1-4" labels or small notes.
+2. **Variable Session Sizing ($N \in [10, 30]$ Words)**:
+   * Learners select their active batch size via a clean selector (`10`, `15`, `20`, `25`, `30`).
+3. **1-Pass Completion Per Practice Run (Error Re-Queueing Until Right)**:
+   * Each word in a practice run only needs to be answered **right once** to clear the current session (never forcing 3 repetitions of the same word in a single session).
+   * If the learner gets a word **wrong**, it stays in the active session queue and re-appears $S_{\text{gap}} = \max\left(3, \left\lfloor \frac{N}{4} \right\rfloor\right)$ cards later until the learner gets it right. Once all $N$ words in the batch are answered right, the practice run ends.
+4. **Cross-Session Mixing (Wrong Words + Old Words + New Words)**:
+   * In subsequent practice runs, the session generator mixes previously wrong words (`isLeech` / `lapseCount > 0`) and older practiced words (with a weighted probability up to 40% of the batch) alongside unlearned words.
 
 ---
 
 ### 4.2 Practice Modality Specifications
 
-#### A. Flashcard Mode (Lật Thẻ)
+#### A. Flashcard Mode (`Lật thẻ`)
 * **Screen Display**:
   * Front: Hanzi (Hero Text).
-  * Back: Pinyin, Âm Hán Việt, Vietnamese definition (Small Text).
-* **UX Safeguard**: Tapping the center stage flips the card; grading buttons (`Quên` | `Gợi ý` | `Đã nhớ`) occupy a fixed bottom zone with a 150ms debounce lock after flipping to prevent accidental double-clicks.
+  * Back: Pinyin | Âm Hán Việt, and Vietnamese definition.
 * **Scoring Rules**:
-  * Tap "Nhớ" (No hint viewed): Step advances (+1).
-  * Tap "Gợi ý" (Hint viewed): Step remains unchanged.
-  * Tap "Quên" (Failed): Step resets to 0; card re-inserted $S_{\text{gap}}$ cards later.
-* **Completion Target**: 3 clean retrievals (`flashcardStep === 3`).
+  * Tap `Đã nhớ`: Word clears the current practice session (`flashcardStep` increments).
+  * Tap `Chưa nhớ`: Word is re-inserted $S_{\text{gap}}$ cards later in the current session until remembered, and flagged for future review.
 
-#### B. Matching Mode (Ghép Thẻ Phản Xạ)
+#### B. Matching Mode (`Ghép thẻ`)
 * **Screen Display**:
-  * **Micro-Board Slicing**: Regardless of session size $N$ (10 to 30), tiles are served in micro-boards of **4 to 5 pairs (8 to 10 tiles) per screen** at a time so visual scanning time never distorts cognitive recall latency.
-  * Active timer and error counter.
-* **Scoring Rules**:
-  * Clean Pass: All pairs matched with 0 misclicks and average response time $\le 2.0\text{ seconds}$ per pair.
-  * Sub-optimal: 0 misclicks, but average time $> 2.0\text{ seconds}$ (no step gain; requires speed replay).
-  * Misclick Penalty: Any error immediately resets the streak to 0.
-* **Completion Target**: 2 consecutive clean passes (`matchingStep === 2`).
+  * Served in micro-boards of **4 pairs (8 tiles) per screen**.
+* **Wrong Pair Feedback**:
+  * Matching two incompatible tiles immediately turns both tiles bright red (`bg-rose-600 text-white`) and triggers a horizontal shake animation (`animate-shake`) before resetting selection.
+  * Any word involved in a mismatch is queued for an extra round at the end of the session until matched cleanly.
 
-#### C. Writing Mode (Gõ Từ Vựng - Bàn Phím)
+#### C. Writing Mode (`Gõ chữ Hán` & `Gõ tiếng Việt`)
 * **Input Method**: Strictly keyboard text input (`<input type="text">`, no drawing canvas).
-* **Two Independent Tracks (Learner Chooses Direction)**:
-  1. **Viết Tiếng Trung (`writingZhStep`: 0 to 2)**:
-     * Prompt: Vietnamese meaning (Hero Text).
-     * **Homonym Disambiguation**: If two or more words in the deck share the same Vietnamese meaning (e.g. `但是` and `可是` both meaning `"Nhưng"`), the prompt automatically appends the `Âm Hán Việt` in Small Text (`Nhưng | Đãn thị` vs. `Nhưng | Khả thị`) to eliminate ambiguity.
-     * Input: Learner types the exact Chinese characters (`学习`).
-  2. **Viết Tiếng Việt (`writingViStep`: 0 to 2)**:
-     * Prompt: Hanzi (Hero Text).
-     * Input: Learner types the Vietnamese meaning.
-     * **Smart Synonym Parsing**: Meanings separated by commas, semicolons, or slashes (e.g. `"Chuẩn bị, sẵn sàng / dự bị"`) are tokenized. Typing *any* valid individual meaning (case-insensitive, whitespace-trimmed, e.g. `"chuẩn bị"`) is graded as 100% correct.
-* **Scoring Rules (Both Tracks)**:
-  * Clean Pass: Accurate keyboard input with zero hints (+1 step).
-  * Hint Used ("Xem gợi ý"): Step resets to 0.
-  * Incorrect Input: Step resets to 0; card recycled $S_{\text{gap}}$ cards later.
-* **Completion Target**: 2 consecutive unassisted generations per track (`writingZhStep === 2` and `writingViStep === 2`).
+* **Two Independent Tracks**:
+  1. **Gõ chữ Hán (`writingZhStep`)**: Prompt shows Vietnamese meaning (+ Âm Hán Việt if homonym); learner types Chinese characters.
+  2. **Gõ tiếng Việt (`writingViStep`)**: Prompt shows Hanzi; learner types any valid tokenized Vietnamese meaning.
+* **Scoring Rules**:
+  * Correct input without hints clears the word from the current session queue.
+  * Incorrect input or viewing the answer reveals the solution and re-inserts the word $S_{\text{gap}}$ cards later until typed accurately.
 
 ---
 

@@ -2,12 +2,24 @@
 
 @layer base {
   body {
-    background-color: #ffffff;
+    background-color: #e6ebf2;
     color: #0f172a;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-7px); }
+  40% { transform: translateX(7px); }
+  60% { transform: translateX(-5px); }
+  80% { transform: translateX(5px); }
+}
+
+.animate-shake {
+  animation: shake 0.32s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
 }
 
 /* Custom scrollbars */
@@ -25,4 +37,3 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
-
