@@ -11,13 +11,16 @@ import {
   Edit3,
   ArrowLeft,
   AlertTriangle,
+  User,
 } from 'lucide-react';
 import { db, seedInitialDecks, refreshDeckStats, resetDeckProgress } from '@/lib/db';
 import { Deck, Folder, StudyMode, TestModeType } from '@/lib/types';
+import { ActiveSession, getActiveSession } from '@/lib/auth';
 import { DeckDetail } from '@/components/DeckDetail';
 import { PracticeArena } from '@/components/PracticeArena';
 import { TestArena } from '@/components/TestArena';
 import { MistakeNotebook } from '@/components/MistakeNotebook';
+import { ProfileAuthModal } from '@/components/ProfileAuthModal';
 
 function trunc1Dec(val: number): string {
   const truncated = Math.floor(val * 10) / 10;
@@ -43,6 +46,17 @@ export default function Home() {
   const [folderName, setFolderName] = useState('');
   const [folderParentId, setFolderParentId] = useState<string | null>(null);
   const [showDeleteFolderConfirm, setShowDeleteFolderConfirm] = useState(false);
+
+  // Profile & Auth Modal
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [activeSession, setActiveSession] = useState<ActiveSession | null>(null);
+
+  useEffect(() => {
+    setActiveSession(getActiveSession());
+    const onAuthChange = () => setActiveSession(getActiveSession());
+    window.addEventListener('cvl-auth-changed', onAuthChange);
+    return () => window.removeEventListener('cvl-auth-changed', onAuthChange);
+  }, []);
 
   // Live queries from IndexedDB
   const folders = useLiveQuery(() => db.folders.toArray(), []);
@@ -373,7 +387,16 @@ export default function Home() {
             </h1>
           </div>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setShowProfileModal(true)}
+              className="py-2.5 px-4 bg-white hover:bg-blue-50 text-slate-700 hover:text-blue-600 rounded-xl text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              <User size={15} />
+              <span>{activeSession ? activeSession.displayName : 'Đăng nhập / Hồ sơ'}</span>
+            </button>
+
             <button
               type="button"
               onClick={() => {
@@ -877,6 +900,12 @@ export default function Home() {
           </div>
         </div>
       )}
+
+      <ProfileAuthModal
+        isOpen={showProfileModal}
+        onClose={() => setShowProfileModal(false)}
+        onAuthChange={(sess) => setActiveSession(sess)}
+      />
     </div>
   );
 }

@@ -253,37 +253,46 @@ export function PracticeArena({
   }, [mode, showEditModal, triggerSwipeLeft, triggerSwipeRight]);
 
   // ── Touch / Pointer Swipe Handlers for Flashcard ──────────────────────
-  const handlePointerDown = (e: React.PointerEvent) => {
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (swipeAnim !== 'idle') return;
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      // ignore if pointer capture not supported
+    }
     pointerStartRef.current = { x: e.clientX, y: e.clientY, active: true };
   };
 
-  const handlePointerMove = (e: React.PointerEvent) => {
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!pointerStartRef.current.active || swipeAnim !== 'idle') return;
     const dx = e.clientX - pointerStartRef.current.x;
     const dy = e.clientY - pointerStartRef.current.y;
     setDragOffset({ x: dx, y: dy });
   };
 
-  const handlePointerUp = () => {
+  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!pointerStartRef.current.active) return;
     pointerStartRef.current.active = false;
-    const { x, y } = dragOffset;
+    try {
+      if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      }
+    } catch {
+      // ignore
+    }
 
-    if (x > 75) {
-      setDragOffset({ x: 0, y: 0 });
+    const dx = e.clientX - pointerStartRef.current.x;
+    const dy = e.clientY - pointerStartRef.current.y;
+    setDragOffset({ x: 0, y: 0 });
+
+    if (dx > 25 && Math.abs(dx) >= Math.abs(dy)) {
       triggerSwipeRight();
-    } else if (x < -75) {
-      setDragOffset({ x: 0, y: 0 });
+    } else if (dx < -25 && Math.abs(dx) >= Math.abs(dy)) {
       triggerSwipeLeft();
-    } else if (Math.abs(y) > 45 && Math.abs(x) < 45) {
-      setDragOffset({ x: 0, y: 0 });
+    } else if (Math.abs(dy) > 20 && Math.abs(dy) > Math.abs(dx)) {
       setIsFlipped((prev) => !prev);
-    } else if (Math.abs(x) < 10 && Math.abs(y) < 10) {
-      setDragOffset({ x: 0, y: 0 });
+    } else if (Math.abs(dx) < 12 && Math.abs(dy) < 12) {
       setIsFlipped((prev) => !prev);
-    } else {
-      setDragOffset({ x: 0, y: 0 });
     }
   };
 
@@ -535,9 +544,9 @@ export function PracticeArena({
               {/* Front Face */}
               <div
                 className={`flip-card-face rounded-3xl shadow-sm p-8 flex flex-col items-center justify-center text-center transition-colors ${
-                  dragOffset.x > 40
+                  dragOffset.x > 18
                     ? 'bg-emerald-50'
-                    : dragOffset.x < -40
+                    : dragOffset.x < -18
                     ? 'bg-rose-50'
                     : 'bg-white'
                 }`}
@@ -550,9 +559,9 @@ export function PracticeArena({
               {/* Back Face */}
               <div
                 className={`flip-card-face flip-card-back rounded-3xl shadow-sm p-8 flex flex-col items-center justify-center text-center transition-colors ${
-                  dragOffset.x > 40
+                  dragOffset.x > 18
                     ? 'bg-emerald-50'
-                    : dragOffset.x < -40
+                    : dragOffset.x < -18
                     ? 'bg-rose-50'
                     : 'bg-white'
                 }`}
