@@ -4,6 +4,12 @@ import os
 import re
 import json
 
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
+
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 WRANGLER_TOML = os.path.join(ROOT_DIR, "wrangler.toml")
 DB_NAME = "chinese-vocab-db"
@@ -17,10 +23,12 @@ def run_cmd(cmd, capture=False):
             cwd=ROOT_DIR,
             shell=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
         )
-        return res.returncode, res.stdout
+        return res.returncode, res.stdout or ""
     else:
         res = subprocess.run(cmd, cwd=ROOT_DIR, shell=True)
         return res.returncode, ""
@@ -40,7 +48,6 @@ def ensure_d1_in_wrangler():
 
     if code == 0:
         try:
-            # Find JSON array in output
             match = re.search(r"\[.*\]", out, re.DOTALL)
             if match:
                 dbs = json.loads(match.group(0))
@@ -54,7 +61,9 @@ def ensure_d1_in_wrangler():
     if not db_id:
         code, out = run_cmd(f"npx --yes wrangler@latest d1 create {DB_NAME}", capture=True)
         print(out)
-        m = re.search(r'database_id\s*=\s*"([a-f0-9-]+)"', out, re.IGNORECASE)
+        m = re.search(r'database_id\s*[:=]\s*"([a-f0-9-]+)"', out, re.IGNORECASE)
+        if not m:
+            m = re.search(r'"uuid"\s*:\s*"([a-f0-9-]+)"', out, re.IGNORECASE)
         if m:
             db_id = m.group(1)
 
@@ -70,7 +79,7 @@ def ensure_d1_in_wrangler():
             f.write(content.strip() + "\n" + d1_block)
         print("[OK] Đã tự động gắn [[d1_databases]] vào wrangler.toml!")
     else:
-        print("[!] Không tự động lấy được database_id (có thể bạn chưa đăng nhập wrangler).")
+        print("[!] Không tự động lấy được database_id (vui lòng kiểm tra đăng nhập wrangler).")
 
 
 def main():
@@ -78,9 +87,9 @@ def main():
     print("  TRIỂN KHAI LÊN CLOUDFLARE (WORKER + ASSETS + D1)    ")
     print("======================================================")
 
-    code, _ = run_cmd("npx --yes wrangler@latest whoami", capture=True)
-    if code != 0:
-        print("[!] Vui lòng đăng nhập Cloudflare trên trình duyệt vừa mở...")
+    code, out = run_cmd("npx --yes wrangler@latest whoami", capture=True)
+    if code != 0 or "not authenticated" in out.lower():
+        print("[!] Vui lòng bấm Allow đăng nhập Cloudflare trên trình duyệt vừa mở...")
         run_cmd("npx --yes wrangler@latest login")
 
     ensure_d1_in_wrangler()
