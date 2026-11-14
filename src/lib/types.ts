@@ -1,11 +1,24 @@
+export interface Folder {
+  id: string;
+  name: string;
+  parentId: string | null; // null for root folder; supports arbitrary nested subfolders
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Deck {
   id: string;
+  folderId?: string | null; // null for root level, or Folder.id
   title: string;
-  topic?: string;          // User-defined topic/category (e.g. "Du lịch", "Công sở", "Từ vựng HSK 3")
-  hskLevel?: string;       // HSK level tag (e.g. "HSK 1", "HSK 2", "HSK 3", "HSK 4", "HSK 5", "HSK 6", "Tự do")
+  topic?: string;
+  hskLevel?: string;
   totalWords: number;
   masteredWords: number;
-  healthPercent: number;   // Dynamic Ebbinghaus health (0 - 100)
+  flashcardDone?: number;
+  matchingDone?: number;
+  writingZhDone?: number;
+  writingViDone?: number;
+  healthPercent: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -22,20 +35,20 @@ export interface VocabItem {
   hskLevel?: string;       // Individual word HSK level tag
   topic?: string;
   charCount: number;
-  
+
   // Progression fields
-  flashcardStep: number;   // 0 to 3
-  matchingStep: number;    // 0 to 2
-  writingZhStep: number;   // 0 to 2 (Prompt: Vietnamese -> Type: Chinese)
-  writingViStep: number;   // 0 to 2 (Prompt: Chinese -> Type: Vietnamese)
-  
+  flashcardStep: number;   // > 0 means completed in Flashcard mode
+  matchingStep: number;    // > 0 means completed in Matching mode
+  writingZhStep: number;   // > 0 means completed in Writing Chinese mode
+  writingViStep: number;   // > 0 means completed in Writing Vietnamese mode
+
   // Memory & SRS state
   stability: number;       // S factor in days
   lastReviewedAt?: string; // ISO timestamp
   lapseCount: number;      // Cumulative error count
   isLeech: boolean;        // Flagged for Sổ tay từ hay sai
-  isMastered: boolean;     // Verified through 100% Test Mode
-  
+  isMastered: boolean;     // Verified through Test Mode
+
   // Sync metadata
   updatedAt: string;       // ISO timestamp
   unsynced?: boolean;      // Local dirty flag
@@ -44,21 +57,14 @@ export interface VocabItem {
 export interface TestRecord {
   id: string;
   deckId: string;
-  mode: 'flashcard' | 'matching' | 'writing-zh' | 'writing-vi' | 'mix';
+  mode: 'matching' | 'writing-zh' | 'writing-vi' | 'mix';
   totalQuestions: number;
   correctCount: number;
-  isPassed: boolean;       // true strictly if correctCount === totalQuestions
+  isPassed: boolean;
   failedVocabIds: string[];
   completedAt: string;
   unsynced?: boolean;
 }
 
 export type StudyMode = 'flashcard' | 'matching' | 'writing-zh' | 'writing-vi';
-export type TestModeType = 'flashcard' | 'matching' | 'writing-zh' | 'writing-vi' | 'mix';
-
-export interface ActiveSessionWord {
-  item: VocabItem;
-  cleanPasses: number;     // passes in current session
-  sessionFails: number;
-}
-
+export type TestModeType = 'matching' | 'writing-zh' | 'writing-vi' | 'mix';

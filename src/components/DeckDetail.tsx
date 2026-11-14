@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { ColumnDef } from '@tanstack/react-table';
+import { useLiveQuery } from 'dexie-react-hooks';
 import {
   ArrowLeft,
   Plus,
@@ -10,9 +11,10 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import { Deck, VocabItem, StudyMode, TestModeType } from '@/lib/types';
-import { db } from '@/lib/db';
+import { db, resetDeckProgress } from '@/lib/db';
 import { DataTable } from '@/components/DataTable';
 import { ImportModal } from '@/components/ImportModal';
+import { EditVocabModal } from '@/components/EditVocabModal';
 
 interface DeckDetailProps {
   deck: Deck;
@@ -24,6 +26,11 @@ interface DeckDetailProps {
   onDeckUpdated: () => void;
 }
 
+function trunc1Dec(val: number): string {
+  const truncated = Math.floor(val * 10) / 10;
+  return Number.isInteger(truncated) ? `${truncated}` : truncated.toFixed(1);
+}
+
 export function DeckDetail({
   deck,
   vocabList,
@@ -33,13 +40,48 @@ export function DeckDetail({
   onOpenLeech,
   onDeckUpdated,
 }: DeckDetailProps) {
-  const [selectedMainTrack, setSelectedMainTrack] = useState<'practice' | 'test' | null>(null);
+  const [selectedMainTrack, setSelectedMainTrack] = useState<'practice' | 'test' | null>('practice');
   const [showImportModal, setShowImportModal] = useState(false);
   const [showEditDeckModal, setShowEditDeckModal] = useState(false);
   const [editTitle, setEditTitle] = useState(deck.title);
   const [editHsk, setEditHsk] = useState(deck.hskLevel || 'Tự do');
   const [editTopic, setEditTopic] = useState(deck.topic || '');
+  const [editFolderId, setEditFolderId] = useState<string | null>(deck.folderId ?? null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  // Word editing modal state
+  const [editingVocab, setEditingVocab] = useState<VocabItem | null>(null);
+
+  const folders = useLiveQuery(() => db.folders.toArray(), []);
+
+  const stats = useMemo(() => {
+    const total = vocabList.length;
+    const flashcardDone = vocabList.filter((w) => (w.flashcardStep || 0) > 0).length;
+    const matchingDone = vocabList.filter((w) => (w.matchingStep || 0) > 0).length;
+    const writingZhDone = vocabList.filter((w) => (w.writingZhStep || 0) > 0).length;
+    const writingViDone = vocabList.filter((w) => (w.writingViStep || 0) > 0).length;
+    const masteredDone = vocabList.filter((w) => !!w.isMastered).length;
+
+    const totalPossibleSteps = total * 4;
+    const completedSteps = flashcardDone + matchingDone + writingZhDone + writingViDone;
+    const overallPct = totalPossibleSteps > 0 ? (completedSteps / totalPossibleSteps) * 100 : 0;
+
+    return {
+      total,
+      flashcardDone,
+      matchingDone,
+      writingZhDone,
+      writingViDone,
+      masteredDone,
+      overallPct,
+      hasAnyProgress:
+        flashcardDone > 0 ||
+        matchingDone > 0 ||
+        writingZhDone > 0 ||
+        writingViDone > 0 ||
+        masteredDone > 0,
+    };
+  }, [vocabList]);
 
   const leechCount = useMemo(
     () => vocabList.filter((w) => w.isLeech || (w.lapseCount || 0) >= 2).length,
@@ -53,6 +95,7 @@ export function DeckDetail({
       title: editTitle.trim(),
       hskLevel: editHsk,
       topic: editTopic.trim(),
+      folderId: editFolderId,
       updatedAt: new Date().toISOString(),
     });
     setShowEditDeckModal(false);
@@ -65,6 +108,15 @@ export function DeckDetail({
     setShowDeleteConfirm(false);
     setShowEditDeckModal(false);
     onBack();
+  };
+
+  const handleResetMode = async (
+    target: StudyMode | 'test' | 'all',
+    e?: React.MouseEvent
+  ) => {
+    if (e) e.stopPropagation();
+    await resetDeckProgress(deck.id, target);
+    onDeckUpdated();
   };
 
   const columns = useMemo<ColumnDef<VocabItem>[]>(
@@ -129,9 +181,42 @@ export function DeckDetail({
           );
         },
       },
+      {
+        id: 'actions',
+        header: '',
+        enableSorting: false,
+        enableGlobalFilter: false,
+        size: 56,
+        cell: ({ row }) => (
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setEditingVocab(row.original);
+              }}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
+              title="Chỉnh sửa từ"
+            >
+              <Edit3 size={14} />
+            </button>
+          </div>
+        ),
+      },
     ],
     []
   );
+
+  const practiceModes: Array<{
+    mode: StudyMode;
+    label: string;
+    done: number;
+  }> = [
+    { mode: 'flashcard', label: 'Lật thẻ', done: stats.flashcardDone },
+    { mode: 'matching', label: 'Ghép thẻ', done: stats.matchingDone },
+    { mode: 'writing-zh', label: 'Gõ chữ Hán', done: stats.writingZhDone },
+    { mode: 'writing-vi', label: 'Gõ tiếng Việt', done: stats.writingViDone },
+  ];
 
   return (
     <div className="w-full max-w-6xl mx-auto py-8 px-4 space-y-6">
@@ -143,16 +228,22 @@ export function DeckDetail({
             onClick={onBack}
             className="inline-flex items-center gap-1.5 py-2 px-3.5 rounded-xl bg-white hover:bg-blue-50 text-slate-700 hover:text-blue-600 text-xs font-semibold shadow-xs transition-colors mb-4 cursor-pointer"
           >
-            <ArrowLeft size={14} /> Tất cả bộ từ
+            <ArrowLeft size={14} /> Quay lại
           </button>
 
           <div className="flex items-center gap-2.5">
             <h1 className="text-3xl font-extrabold text-slate-800 tracking-tight">{deck.title}</h1>
             <button
               type="button"
-              onClick={() => setShowEditDeckModal(true)}
+              onClick={() => {
+                setEditTitle(deck.title);
+                setEditHsk(deck.hskLevel || 'Tự do');
+                setEditTopic(deck.topic || '');
+                setEditFolderId(deck.folderId ?? null);
+                setShowEditDeckModal(true);
+              }}
               className="p-2 rounded-xl text-slate-500 hover:text-blue-600 bg-white hover:bg-blue-50 shadow-xs transition-colors cursor-pointer"
-              title="Chỉnh sửa"
+              title="Chỉnh sửa bộ từ"
             >
               <Edit3 size={15} />
             </button>
@@ -178,6 +269,17 @@ export function DeckDetail({
         <div className="flex items-center gap-2.5 flex-wrap">
           <button
             type="button"
+            onClick={() => handleResetMode('all')}
+            disabled={!stats.hasAnyProgress}
+            className="py-2.5 px-3.5 bg-white hover:bg-rose-50 disabled:opacity-40 text-slate-700 hover:text-rose-600 text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+            title="Đặt lại toàn bộ tiến độ bộ từ này"
+          >
+            <RotateCcw size={14} />
+            <span>Đặt lại tiến độ</span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => setShowImportModal(true)}
             className="py-2.5 px-4 bg-white hover:bg-blue-50 text-slate-700 hover:text-blue-600 text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
           >
@@ -195,6 +297,22 @@ export function DeckDetail({
               <span>Từ hay sai ({leechCount})</span>
             </button>
           )}
+        </div>
+      </div>
+
+      {/* ── Overall Deck Progress Bar ───────────────────────────────── */}
+      <div className="bg-white rounded-2xl p-4 shadow-xs space-y-2">
+        <div className="flex items-center justify-between text-xs font-bold">
+          <span className="text-slate-700">Tiến độ tổng</span>
+          <span className="text-blue-600">
+            {trunc1Dec(stats.overallPct)}% | Đã thuộc {stats.masteredDone}/{stats.total} từ
+          </span>
+        </div>
+        <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-blue-600 rounded-full transition-all duration-300"
+            style={{ width: `${Math.min(100, stats.overallPct)}%` }}
+          />
         </div>
       </div>
 
@@ -230,71 +348,117 @@ export function DeckDetail({
           </button>
         </div>
 
-        {/* Sub-mode Selection when Luyện tập is clicked */}
+        {/* Sub-mode Selection when Luyện tập is clicked (with per-mode progress bar + reset button) */}
         {selectedMainTrack === 'practice' && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
-            <button
-              type="button"
-              onClick={() => onStartPractice('flashcard')}
-              className="py-3.5 px-4 bg-white hover:bg-blue-600 text-slate-700 hover:text-white rounded-xl text-sm font-bold text-center transition-colors shadow-xs cursor-pointer"
-            >
-              Lật thẻ
-            </button>
-            <button
-              type="button"
-              onClick={() => onStartPractice('matching')}
-              className="py-3.5 px-4 bg-white hover:bg-blue-600 text-slate-700 hover:text-white rounded-xl text-sm font-bold text-center transition-colors shadow-xs cursor-pointer"
-            >
-              Ghép thẻ
-            </button>
-            <button
-              type="button"
-              onClick={() => onStartPractice('writing-zh')}
-              className="py-3.5 px-4 bg-white hover:bg-blue-600 text-slate-700 hover:text-white rounded-xl text-sm font-bold text-center transition-colors shadow-xs cursor-pointer"
-            >
-              Gõ chữ Hán
-            </button>
-            <button
-              type="button"
-              onClick={() => onStartPractice('writing-vi')}
-              className="py-3.5 px-4 bg-white hover:bg-blue-600 text-slate-700 hover:text-white rounded-xl text-sm font-bold text-center transition-colors shadow-xs cursor-pointer"
-            >
-              Gõ tiếng Việt
-            </button>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
+            {practiceModes.map(({ mode, label, done }) => {
+              const pct = stats.total > 0 ? (done / stats.total) * 100 : 0;
+              return (
+                <div
+                  key={mode}
+                  onClick={() => onStartPractice(mode)}
+                  className="p-4 bg-white hover:bg-blue-50/50 rounded-2xl shadow-xs transition-all cursor-pointer group flex flex-col justify-between gap-3 border border-transparent hover:border-blue-200"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-bold text-slate-800 group-hover:text-blue-600 transition-colors">
+                      {label}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={(e) => handleResetMode(mode, e)}
+                      disabled={done === 0}
+                      title={`Đặt lại tiến độ ${label}`}
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 disabled:opacity-25 transition-colors cursor-pointer"
+                    >
+                      <RotateCcw size={13} />
+                    </button>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-[11px] font-semibold text-slate-500">
+                      <span>
+                        {done} / {stats.total} từ
+                      </span>
+                      <span className="text-blue-600 font-bold">{trunc1Dec(pct)}%</span>
+                    </div>
+                    <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-blue-600 rounded-full transition-all duration-300"
+                        style={{ width: `${Math.min(100, pct)}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
 
-        {/* Sub-mode Selection when Kiểm tra is clicked (No Flashcard in Test Mode) */}
+        {/* Sub-mode Selection when Kiểm tra is clicked (All buttons uniform slate-700, no blue on Hỗn hợp) */}
         {selectedMainTrack === 'test' && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
-            <button
-              type="button"
-              onClick={() => onStartTest('mix')}
-              className="py-3.5 px-4 bg-white hover:bg-blue-600 text-blue-600 hover:text-white rounded-xl text-sm font-bold text-center transition-colors shadow-xs cursor-pointer"
-            >
-              Hỗn hợp
-            </button>
-            <button
-              type="button"
-              onClick={() => onStartTest('matching')}
-              className="py-3.5 px-4 bg-white hover:bg-blue-600 text-slate-700 hover:text-white rounded-xl text-sm font-bold text-center transition-colors shadow-xs cursor-pointer"
-            >
-              Ghép thẻ
-            </button>
-            <button
-              type="button"
-              onClick={() => onStartTest('writing-zh')}
-              className="py-3.5 px-4 bg-white hover:bg-blue-600 text-slate-700 hover:text-white rounded-xl text-sm font-bold text-center transition-colors shadow-xs cursor-pointer"
-            >
-              Gõ chữ Hán
-            </button>
-            <button
-              type="button"
-              onClick={() => onStartTest('writing-vi')}
-              className="py-3.5 px-4 bg-white hover:bg-blue-600 text-slate-700 hover:text-white rounded-xl text-sm font-bold text-center transition-colors shadow-xs cursor-pointer"
-            >
-              Gõ tiếng Việt
-            </button>
+          <div className="space-y-3 pt-1">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <button
+                type="button"
+                onClick={() => onStartTest('mix')}
+                className="py-3.5 px-4 bg-white hover:bg-blue-600 text-slate-700 hover:text-white rounded-xl text-sm font-bold text-center transition-colors shadow-xs cursor-pointer"
+              >
+                Hỗn hợp
+              </button>
+              <button
+                type="button"
+                onClick={() => onStartTest('matching')}
+                className="py-3.5 px-4 bg-white hover:bg-blue-600 text-slate-700 hover:text-white rounded-xl text-sm font-bold text-center transition-colors shadow-xs cursor-pointer"
+              >
+                Ghép thẻ
+              </button>
+              <button
+                type="button"
+                onClick={() => onStartTest('writing-zh')}
+                className="py-3.5 px-4 bg-white hover:bg-blue-600 text-slate-700 hover:text-white rounded-xl text-sm font-bold text-center transition-colors shadow-xs cursor-pointer"
+              >
+                Gõ chữ Hán
+              </button>
+              <button
+                type="button"
+                onClick={() => onStartTest('writing-vi')}
+                className="py-3.5 px-4 bg-white hover:bg-blue-600 text-slate-700 hover:text-white rounded-xl text-sm font-bold text-center transition-colors shadow-xs cursor-pointer"
+              >
+                Gõ tiếng Việt
+              </button>
+            </div>
+
+            <div className="bg-white rounded-xl p-3.5 shadow-2xs flex items-center justify-between gap-4">
+              <div className="flex-1 space-y-1.5">
+                <div className="flex items-center justify-between text-xs font-bold text-slate-700">
+                  <span>Tiến độ kiểm tra (Đã thuộc)</span>
+                  <span className="text-emerald-600">
+                    {stats.masteredDone} / {stats.total} từ (
+                    {stats.total > 0 ? trunc1Dec((stats.masteredDone / stats.total) * 100) : 0}%)
+                  </span>
+                </div>
+                <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-emerald-500 rounded-full transition-all duration-300"
+                    style={{
+                      width: `${
+                        stats.total > 0 ? Math.min(100, (stats.masteredDone / stats.total) * 100) : 0
+                      }%`,
+                    }}
+                  />
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={(e) => handleResetMode('test', e)}
+                disabled={stats.masteredDone === 0}
+                className="py-1.5 px-3 rounded-lg bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-600 disabled:opacity-30 text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer shrink-0"
+                title="Đặt lại tiến độ Kiểm tra"
+              >
+                <RotateCcw size={12} />
+                <span>Đặt lại</span>
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -317,6 +481,20 @@ export function DeckDetail({
         onSuccess={onDeckUpdated}
       />
 
+      <EditVocabModal
+        vocab={editingVocab}
+        isOpen={!!editingVocab}
+        onClose={() => setEditingVocab(null)}
+        onSaved={() => {
+          setEditingVocab(null);
+          onDeckUpdated();
+        }}
+        onDeleted={() => {
+          setEditingVocab(null);
+          onDeckUpdated();
+        }}
+      />
+
       {/* ── Edit Deck Modal ────────────────────────────────────────── */}
       {showEditDeckModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -335,6 +513,37 @@ export function DeckDetail({
                   onChange={(e) => setEditTitle(e.target.value)}
                   className="w-full px-3.5 py-2.5 text-xs font-medium bg-slate-100 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-600"
                 />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1.5">Thư mục</label>
+                <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto p-1">
+                  <button
+                    type="button"
+                    onClick={() => setEditFolderId(null)}
+                    className={`py-1.5 px-3 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                      editFolderId === null
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    Ngoài cùng (Gốc)
+                  </button>
+                  {(folders || []).map((f) => (
+                    <button
+                      key={f.id}
+                      type="button"
+                      onClick={() => setEditFolderId(f.id)}
+                      className={`py-1.5 px-3 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                        editFolderId === f.id
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      {f.name}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <div>

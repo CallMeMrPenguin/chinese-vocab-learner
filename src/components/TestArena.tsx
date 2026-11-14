@@ -1,14 +1,15 @@
 'use client';
 
-import React, { useState } from 'react';
-import { ArrowLeft, Award, ShieldAlert, RotateCcw } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ArrowLeft, Award, ShieldAlert, RotateCcw, Edit3 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { VocabItem, TestModeType } from '@/lib/types';
-import { db } from '@/lib/db';
+import { db, refreshDeckStats } from '@/lib/db';
+import { EditVocabModal } from '@/components/EditVocabModal';
 
 interface TestArenaProps {
   deckId: string;
-  deckTitle: string;
+  deckTitle?: string;
   allWords: VocabItem[];
   testMode: TestModeType;
   onExit: () => void;
@@ -30,9 +31,6 @@ export function TestArena({
   onExit,
   onSuccess,
 }: TestArenaProps) {
-  const [testSize, setTestSize] = useState<number>(20);
-  const [isStarted, setIsStarted] = useState<boolean>(false);
-
   const [questions, setQuestions] = useState<TestQuestion[]>([]);
   const [currentIndex, setCurrentIndex] = useState<number>(0);
   const [userInput, setUserInput] = useState<string>('');
@@ -41,11 +39,55 @@ export function TestArena({
 
   // Matching test state
   const [matchPool, setMatchPool] = useState<VocabItem[]>([]);
+  const [totalMatchTarget, setTotalMatchTarget] = useState<number>(0);
+  const [completedMatchCount, setCompletedMatchCount] = useState<number>(0);
   const [matchBoard, setMatchBoard] = useState<
     Array<{ id: string; vocabId: string; text: string; type: 'zh' | 'vi'; matched: boolean }>
   >([]);
   const [selectedTile, setSelectedTile] = useState<string | null>(null);
   const [wrongPairIds, setWrongPairIds] = useState<string[]>([]);
+
+  // Edit word modal state
+  const [showEditModal, setShowEditModal] = useState<boolean>(false);
+
+  const buildQuestionForVocab = (
+    w: VocabItem,
+    forcedType?: 'writing-zh' | 'writing-vi'
+  ): TestQuestion => {
+    let qType: 'writing-zh' | 'writing-vi' = forcedType || 'writing-zh';
+    if (!forcedType) {
+      if (testMode === 'mix') {
+        qType = Math.random() < 0.5 ? 'writing-zh' : 'writing-vi';
+      } else if (testMode === 'writing-vi') {
+        qType = 'writing-vi';
+      } else {
+        qType = 'writing-zh';
+      }
+    }
+
+    if (qType === 'writing-zh') {
+      return {
+        vocab: w,
+        type: qType,
+        prompt: w.meaningVi.replace(/^\([^)]+\)\s*/g, '').split(/[,;\/]/)[0].trim(),
+        subPrompt: w.amHanViet || undefined,
+        expectedAnswers: [w.hanzi.trim().toLowerCase()],
+      };
+    } else {
+      const synonyms = w.meaningVi
+        .replace(/^\([^)]+\)\s*/g, '')
+        .split(/[,;\/]/)
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean);
+      return {
+        vocab: w,
+        type: qType,
+        prompt: w.hanzi,
+        subPrompt: w.pinyin || undefined,
+        expectedAnswers: synonyms,
+      };
+    }
+  };
 
   const setupMatchingBoard = (pool: VocabItem[]) => {
     const slice = pool.slice(0, 4);
@@ -72,17 +114,22 @@ export function TestArena({
   };
 
   const startTest = (wordsToTest?: VocabItem[]) => {
+    // prioritize unmastered words first, fixed batch of 20 (or all if deck < 20)
+    const unmastered = allWords.filter((w) => !w.isMastered).sort(() => Math.random() - 0.5);
+    const mastered = allWords.filter((w) => w.isMastered).sort(() => Math.random() - 0.5);
+    const orderedPool = [...unmastered, ...mastered];
+
     const sourceWords = wordsToTest
       ? [...wordsToTest]
-      : [...allWords]
-          .sort(() => Math.random() - 0.5)
-          .slice(0, testSize === 0 ? allWords.length : Math.min(testSize, allWords.length));
+      : orderedPool.slice(0, Math.min(20, allWords.length));
 
     setFailedVocabList([]);
     setIsTestFinished(false);
 
     if (testMode === 'matching') {
       setMatchPool(sourceWords);
+      setTotalMatchTarget(sourceWords.length);
+      setCompletedMatchCount(0);
       setupMatchingBoard(sourceWords);
       setQuestions(
         sourceWords.map((w) => ({
@@ -92,50 +139,21 @@ export function TestArena({
           expectedAnswers: [w.meaningVi],
         }))
       );
-      setIsStarted(true);
       return;
     }
 
-    const list: TestQuestion[] = sourceWords.map((w) => {
-      let qType: 'writing-zh' | 'writing-vi' = 'writing-zh';
-
-      if (testMode === 'mix') {
-        qType = Math.random() < 0.5 ? 'writing-zh' : 'writing-vi';
-      } else if (testMode === 'writing-vi') {
-        qType = 'writing-vi';
-      } else {
-        qType = 'writing-zh';
-      }
-
-      if (qType === 'writing-zh') {
-        return {
-          vocab: w,
-          type: qType,
-          prompt: w.meaningVi.replace(/^\([^)]+\)\s*/g, '').split(/[,;\/]/)[0].trim(),
-          subPrompt: w.amHanViet || undefined,
-          expectedAnswers: [w.hanzi.trim().toLowerCase()],
-        };
-      } else {
-        const synonyms = w.meaningVi
-          .replace(/^\([^)]+\)\s*/g, '')
-          .split(/[,;\/]/)
-          .map((s) => s.trim().toLowerCase())
-          .filter(Boolean);
-        return {
-          vocab: w,
-          type: qType,
-          prompt: w.hanzi,
-          subPrompt: w.pinyin || undefined,
-          expectedAnswers: synonyms,
-        };
-      }
-    });
-
+    const list: TestQuestion[] = sourceWords.map((w) => buildQuestionForVocab(w));
     setQuestions(list.sort(() => Math.random() - 0.5));
     setCurrentIndex(0);
     setUserInput('');
-    setIsStarted(true);
   };
+
+  useEffect(() => {
+    if (allWords.length > 0 && questions.length === 0 && matchPool.length === 0) {
+      startTest();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allWords]);
 
   const handleTileClick = async (tileId: string) => {
     if (wrongPairIds.length > 0) return;
@@ -164,6 +182,7 @@ export function TestArena({
       );
       setMatchBoard(updated);
       setSelectedTile(null);
+      setCompletedMatchCount((c) => c + 1);
 
       if (updated.every((t) => t.matched)) {
         const remaining = matchPool.slice(4);
@@ -177,7 +196,9 @@ export function TestArena({
     } else {
       setWrongPairIds([prevTile.id, clicked.id]);
       setSelectedTile(null);
-      const wrongVocab = allWords.find((w) => w.id === prevTile.vocabId);
+      const wrongVocab =
+        matchPool.find((w) => w.id === prevTile.vocabId) ||
+        allWords.find((w) => w.id === prevTile.vocabId);
       if (wrongVocab) {
         setFailedVocabList((prev) =>
           prev.some((item) => item.id === wrongVocab.id) ? prev : [...prev, wrongVocab]
@@ -232,73 +253,69 @@ export function TestArena({
       completedAt: new Date().toISOString(),
     });
 
-    if (isPassed) {
-      confetti({ particleCount: 80, spread: 60, origin: { y: 0.6 } });
-      for (const q of questions) {
+    const failedSet = new Set(allFailed.map((w) => w.id));
+    for (const q of questions) {
+      if (!failedSet.has(q.vocab.id)) {
         await db.vocab.update(q.vocab.id, {
           isMastered: true,
           lastReviewedAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         });
       }
-      onSuccess();
-    } else {
-      for (const w of allFailed) {
-        const nextLapse = (w.lapseCount || 0) + 1;
-        await db.vocab.update(w.id, {
-          lapseCount: nextLapse,
-          isLeech: true,
-          updatedAt: new Date().toISOString(),
-        });
-      }
+    }
+
+    for (const w of allFailed) {
+      const nextLapse = (w.lapseCount || 0) + 1;
+      await db.vocab.update(w.id, {
+        lapseCount: nextLapse,
+        isLeech: true,
+        isMastered: false,
+        updatedAt: new Date().toISOString(),
+      });
+    }
+
+    await refreshDeckStats(deckId);
+
+    if (isPassed) {
+      confetti({ particleCount: 80, spread: 60, origin: { y: 0.6 } });
     }
   };
 
-  // ── Setup Screen ──────────────────────────────────────────────────────
-  if (!isStarted) {
-    return (
-      <div className="max-w-md mx-auto py-16 px-4 text-center">
-        <button
-          onClick={onExit}
-          className="inline-flex items-center gap-1.5 py-2 px-4 rounded-xl bg-white hover:bg-blue-50 text-slate-700 hover:text-blue-600 text-xs font-bold shadow-xs transition-colors mb-10 cursor-pointer"
-        >
-          <ArrowLeft size={14} /> Quay lại
-        </button>
-
-        <div className="bg-white rounded-3xl p-7 shadow-xs space-y-6">
-          <h2 className="text-xl font-bold text-slate-800">Số lượng từ kiểm tra</h2>
-
-          <div className="grid grid-cols-4 gap-2.5">
-            {[
-              { label: '10', value: 10 },
-              { label: '20', value: 20 },
-              { label: '30', value: 30 },
-              { label: 'Tất cả', value: 0 },
-            ].map((opt) => (
-              <button
-                key={opt.value}
-                onClick={() => setTestSize(opt.value)}
-                className={`py-3 rounded-2xl text-sm font-bold transition-all cursor-pointer ${
-                  testSize === opt.value
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'bg-slate-100 text-slate-700 hover:bg-blue-50 hover:text-blue-600'
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-
-          <button
-            onClick={() => startTest()}
-            className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl text-sm transition-colors shadow-sm cursor-pointer"
-          >
-            Bắt đầu
-          </button>
-        </div>
-      </div>
+  const handleVocabEdited = (updated: VocabItem) => {
+    setQuestions((prev) =>
+      prev.map((q) => (q.vocab.id === updated.id ? buildQuestionForVocab(updated, q.type) : q))
     );
-  }
+    setMatchPool((prev) => prev.map((w) => (w.id === updated.id ? updated : w)));
+    setMatchBoard((prev) =>
+      prev.map((tile) => {
+        if (tile.vocabId !== updated.id) return tile;
+        return {
+          ...tile,
+          text:
+            tile.type === 'zh'
+              ? updated.hanzi
+              : updated.meaningVi.replace(/^\([^)]+\)\s*/g, '').split(/[,;]/)[0].trim(),
+        };
+      })
+    );
+  };
+
+  const handleVocabDeleted = (deletedId: string) => {
+    const nextQuestions = questions.filter((q) => q.vocab.id !== deletedId);
+    setQuestions(nextQuestions);
+    if (nextQuestions.length === 0) {
+      onExit();
+      return;
+    }
+    if (currentIndex >= nextQuestions.length) {
+      setCurrentIndex(nextQuestions.length - 1);
+    }
+    const nextPool = matchPool.filter((w) => w.id !== deletedId);
+    setMatchPool(nextPool);
+    if (testMode === 'matching') {
+      setupMatchingBoard(nextPool);
+    }
+  };
 
   // ── Result Screen ─────────────────────────────────────────────────────
   if (isTestFinished) {
@@ -318,7 +335,7 @@ export function TestArena({
                 {correctCount} / {questions.length} từ chính xác
               </div>
               <button
-                onClick={onExit}
+                onClick={onSuccess}
                 className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl text-xs transition-colors cursor-pointer"
               >
                 Hoàn thành
@@ -360,6 +377,7 @@ export function TestArena({
 
   // ── Matching Test Screen ──────────────────────────────────────────────
   if (testMode === 'matching') {
+    const activeBoardWords = matchPool.slice(0, 4);
     return (
       <div className="max-w-xl mx-auto py-8 px-4">
         <div className="flex items-center justify-between pb-6">
@@ -370,8 +388,19 @@ export function TestArena({
             <ArrowLeft size={13} /> Thoát
           </button>
 
-          <div className="text-xs font-bold text-blue-600 bg-white py-1.5 px-3.5 rounded-xl shadow-2xs">
-            Còn {matchPool.length} từ
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowEditModal(true)}
+              className="inline-flex items-center gap-1.5 py-1.5 px-3 rounded-xl bg-white hover:bg-blue-50 text-slate-600 hover:text-blue-600 text-xs font-bold shadow-2xs transition-colors cursor-pointer"
+              title="Sửa từ"
+            >
+              <Edit3 size={13} />
+              <span>Sửa từ</span>
+            </button>
+            <div className="text-xs font-bold text-blue-600 bg-white py-1.5 px-3.5 rounded-xl shadow-2xs">
+              {completedMatchCount} / {totalMatchTarget}
+            </div>
           </div>
         </div>
 
@@ -401,6 +430,15 @@ export function TestArena({
             );
           })}
         </div>
+
+        <EditVocabModal
+          vocab={activeBoardWords[0] || null}
+          vocabOptions={activeBoardWords}
+          isOpen={showEditModal}
+          onClose={() => setShowEditModal(false)}
+          onSaved={handleVocabEdited}
+          onDeleted={handleVocabDeleted}
+        />
       </div>
     );
   }
@@ -420,8 +458,20 @@ export function TestArena({
           <ArrowLeft size={13} /> Thoát
         </button>
 
-        <div className="text-xs font-bold text-blue-600 bg-white py-1.5 px-3.5 rounded-xl shadow-2xs">
-          {currentIndex + 1} / {questions.length}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowEditModal(true)}
+            className="inline-flex items-center gap-1.5 py-1.5 px-3 rounded-xl bg-white hover:bg-blue-50 text-slate-600 hover:text-blue-600 text-xs font-bold shadow-2xs transition-colors cursor-pointer"
+            title="Sửa từ"
+          >
+            <Edit3 size={13} />
+            <span>Sửa từ</span>
+          </button>
+
+          <div className="text-xs font-bold text-blue-600 bg-white py-1.5 px-3.5 rounded-xl shadow-2xs">
+            {currentIndex + 1} / {questions.length}
+          </div>
         </div>
       </div>
 
@@ -462,6 +512,14 @@ export function TestArena({
           {currentIndex + 1 === questions.length ? 'Hoàn thành' : 'Tiếp theo'}
         </button>
       </form>
+
+      <EditVocabModal
+        vocab={currentQ.vocab}
+        isOpen={showEditModal}
+        onClose={() => setShowEditModal(false)}
+        onSaved={handleVocabEdited}
+        onDeleted={handleVocabDeleted}
+      />
     </div>
   );
 }
