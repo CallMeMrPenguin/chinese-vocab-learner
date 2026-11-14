@@ -21,6 +21,7 @@ import { PracticeArena } from '@/components/PracticeArena';
 import { TestArena } from '@/components/TestArena';
 import { MistakeNotebook } from '@/components/MistakeNotebook';
 import { ProfileAuthModal } from '@/components/ProfileAuthModal';
+import { AuthPage } from '@/components/AuthPage';
 
 function trunc1Dec(val: number): string {
   const truncated = Math.floor(val * 10) / 10;
@@ -50,9 +51,11 @@ export default function Home() {
   // Profile & Auth Modal
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [activeSession, setActiveSession] = useState<ActiveSession | null>(null);
+  const [authReady, setAuthReady] = useState(false);
 
   useEffect(() => {
     setActiveSession(getActiveSession());
+    setAuthReady(true);
     const onAuthChange = () => setActiveSession(getActiveSession());
     window.addEventListener('cvl-auth-changed', onAuthChange);
     return () => window.removeEventListener('cvl-auth-changed', onAuthChange);
@@ -286,6 +289,14 @@ export default function Home() {
   };
 
   // ── ROUTER / VIEW SWITCHER ────────────────────────────────────────────
+
+  if (!authReady) {
+    return null;
+  }
+
+  if (!activeSession) {
+    return <AuthPage onAuthenticated={(s) => setActiveSession(s)} />;
+  }
 
   if (view === 'practice' && activeDeck && activeDeckVocab) {
     return (
@@ -799,12 +810,9 @@ export default function Home() {
             {showDeleteFolderConfirm && editingFolder && (
               <div className="absolute inset-0 bg-white rounded-3xl p-6 flex flex-col items-center justify-center text-center">
                 <AlertTriangle size={32} className="text-rose-600 mb-3" />
-                <h3 className="text-base font-bold text-slate-800 mb-2">
+                <h3 className="text-base font-bold text-slate-800 mb-5">
                   Xóa thư mục &ldquo;{editingFolder.name}&rdquo;?
                 </h3>
-                <p className="text-xs text-slate-500 mb-5">
-                  Các bộ từ bên trong sẽ được chuyển ra thư mục ngoài.
-                </p>
                 <div className="flex items-center gap-2.5">
                   <button
                     type="button"

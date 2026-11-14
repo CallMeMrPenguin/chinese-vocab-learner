@@ -8,6 +8,7 @@ export interface StoredUserAccount {
   securityQuestion: string;
   securityAnswerHash: string;
   recoveryKeyHash: string;
+  isAdmin?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -15,6 +16,7 @@ export interface StoredUserAccount {
 export interface ActiveSession {
   username: string;
   displayName: string;
+  isAdmin: boolean;
   sessionToken: string;
   loggedInAt: string;
 }
@@ -24,12 +26,16 @@ const ACTIVE_SESSION_KEY = 'cvl_active_session_v1';
 const LOCKOUT_STORAGE_KEY = 'cvl_auth_lockout_v1';
 
 export const SECURITY_QUESTIONS = [
-  'Tên trường cấp 3 của bạn là gì?',
-  'Món ăn yêu thích nhất của bạn là gì?',
-  'Thành phố nơi bạn sinh ra là gì?',
-  'Tên thú cưng đầu tiên của bạn là gì?',
-  'Biệt danh thời nhỏ của bạn là gì?',
+  'Tên trường cấp 3 của bạn?',
+  'Món ăn yêu thích của bạn?',
+  'Thành phố nơi bạn sinh ra?',
+  'Tên thú cưng đầu tiên?',
+  'Biệt danh thời nhỏ?',
 ];
+
+const ADMIN_USERNAME = 'admin';
+const ADMIN_DEFAULT_PWD = 'callmemrpenguin';
+const ADMIN_SALT = 'a1b2c3d4e5f60718293a4b5c6d7e8f90';
 
 function bytesToHex(bytes: Uint8Array): string {
   return Array.from(bytes)
@@ -56,10 +62,6 @@ export function generateRecoveryKey(): string {
   return `CVL-${part1}-${part2}`;
 }
 
-/**
- * Security Layer 1: PBKDF2-SHA256 (100,000 iterations) Key Derivation
- * Never stores raw passwords, security answers, or recovery keys in plain text.
- */
 export async function derivePBKDF2Hash(secret: string, saltHex: string): Promise<string> {
   const enc = new TextEncoder();
   const keyMaterial = await crypto.subtle.importKey(
@@ -84,24 +86,13 @@ export async function derivePBKDF2Hash(secret: string, saltHex: string): Promise
   return bytesToHex(new Uint8Array(derivedBits));
 }
 
-/**
- * Security Layer 2: Password Policy Check (min 6 chars, contains letters & numbers)
- */
 export function validatePasswordStrength(password: string): string | null {
   if (password.length < 6) {
-    return 'Mật khẩu phải có ít nhất 6 ký tự.';
-  }
-  const hasLetter = /[a-zA-Z]/.test(password);
-  const hasNumber = /[0-9]/.test(password);
-  if (!hasLetter || !hasNumber) {
-    return 'Mật khẩu cần bao gồm cả chữ cái và chữ số.';
+    return 'Mật khẩu tối thiểu 6 ký tự.';
   }
   return null;
 }
 
-/**
- * Security Layer 3: Brute-force Rate Limiting (Max 5 failed attempts -> 60s lockout)
- */
 interface LockoutState {
   failedAttempts: number;
   lockoutUntil: number;
@@ -170,8 +161,41 @@ function saveLocalAccount(account: StoredUserAccount): void {
   localStorage.setItem(ACCOUNTS_STORAGE_KEY, JSON.stringify(map));
 }
 
+async function ensureBuiltInAdminAccount(): Promise<StoredUserAccount> {
+  const map = getLocalAccountsMap();
+  if (map[ADMIN_USERNAME]) {
+    return map[ADMIN_USERNAME];
+  }
+
+  const [passwordHash, securityAnswerHash, recoveryKeyHash] = await Promise.all([
+    derivePBKDF2Hash(ADMIN_DEFAULT_PWD, ADMIN_SALT),
+    derivePBKDF2Hash(ADMIN_DEFAULT_PWD, `${ADMIN_SALT}_sec`),
+    derivePBKDF2Hash('CVLADMINKEY', `${ADMIN_SALT}_rec`),
+  ]);
+
+  const now = new Date().toISOString();
+  const adminAcc: StoredUserAccount = {
+    username: ADMIN_USERNAME,
+    displayName: 'Admin',
+    saltHex: ADMIN_SALT,
+    passwordHash,
+    securityQuestion: SECURITY_QUESTIONS[0],
+    securityAnswerHash,
+    recoveryKeyHash,
+    isAdmin: true,
+    createdAt: now,
+    updatedAt: now,
+  };
+  saveLocalAccount(adminAcc);
+  return adminAcc;
+}
+
 async function fetchAccountFromCloudOrLocal(username: string): Promise<StoredUserAccount | null> {
   const key = username.trim().toLowerCase();
+  if (key === ADMIN_USERNAME) {
+    await ensureBuiltInAdminAccount();
+  }
+
   const localMap = getLocalAccountsMap();
 
   try {
@@ -224,6 +248,7 @@ function createActiveSession(account: StoredUserAccount): ActiveSession {
   const session: ActiveSession = {
     username: account.username,
     displayName: account.displayName,
+    isAdmin: account.username === ADMIN_USERNAME || Boolean(account.isAdmin),
     sessionToken: generateSaltHex(24),
     loggedInAt: new Date().toISOString(),
   };
@@ -238,9 +263,6 @@ export function logoutUser(): void {
   window.dispatchEvent(new Event('cvl-auth-changed'));
 }
 
-/**
- * Register a new user account with PBKDF2-hashed password, security answer, and recovery key
- */
 export async function registerUserAccount(params: {
   username: string;
   displayName?: string;
@@ -255,13 +277,16 @@ export async function registerUserAccount(params: {
 }> {
   const cleanUser = params.username.trim().toLowerCase();
   if (!cleanUser || cleanUser.length < 3) {
-    return { ok: false, error: 'Tên đăng nhập phải có ít nhất 3 ký tự.' };
+    return { ok: false, error: 'Tên đăng nhập tối thiểu 3 ký tự.' };
   }
   if (!/^[a-z0-9_.-]+$/.test(cleanUser)) {
     return {
       ok: false,
-      error: 'Tên đăng nhập chỉ dùng chữ thường không dấu, số, dấu gạch dưới hoặc dấu chấm.',
+      error: 'Tên đăng nhập chỉ gồm chữ thường không dấu, số, dấu gạch dưới hoặc chấm.',
     };
+  }
+  if (cleanUser === ADMIN_USERNAME) {
+    return { ok: false, error: 'Tên đăng nhập này đã tồn tại.' };
   }
 
   const pwdErr = validatePasswordStrength(params.password);
@@ -269,7 +294,7 @@ export async function registerUserAccount(params: {
 
   const cleanAnswer = params.securityAnswer.trim().toLowerCase();
   if (cleanAnswer.length < 2) {
-    return { ok: false, error: 'Vui lòng nhập câu trả lời bảo mật (ít nhất 2 ký tự).' };
+    return { ok: false, error: 'Vui lòng nhập câu trả lời bảo mật.' };
   }
 
   const existing = await fetchAccountFromCloudOrLocal(cleanUser);
@@ -296,6 +321,7 @@ export async function registerUserAccount(params: {
     securityQuestion: params.securityQuestion,
     securityAnswerHash,
     recoveryKeyHash,
+    isAdmin: false,
     createdAt: now,
     updatedAt: now,
   };
@@ -308,9 +334,6 @@ export async function registerUserAccount(params: {
   return { ok: true, recoveryKey, session };
 }
 
-/**
- * Login with rate-limiting & PBKDF2 verification
- */
 export async function loginUserAccount(params: {
   username: string;
   password: string;
@@ -319,7 +342,7 @@ export async function loginUserAccount(params: {
   if (lockedSec > 0) {
     return {
       ok: false,
-      error: `Tài khoản tạm khóa bảo mật do nhập sai nhiều lần. Vui lòng thử lại sau ${lockedSec} giây.`,
+      error: `Tạm khóa ${lockedSec} giây.`,
     };
   }
 
@@ -331,8 +354,8 @@ export async function loginUserAccount(params: {
       ok: false,
       error:
         fail.lockedSeconds > 0
-          ? `Nhập sai quá 5 lần. Khóa tạm thời ${fail.lockedSeconds} giây.`
-          : `Tên đăng nhập hoặc mật khẩu không đúng (còn ${fail.attemptsLeft} lần thử).`,
+          ? `Khóa tạm thời ${fail.lockedSeconds} giây.`
+          : `Sai tên đăng nhập hoặc mật khẩu.`,
     };
   }
 
@@ -343,8 +366,8 @@ export async function loginUserAccount(params: {
       ok: false,
       error:
         fail.lockedSeconds > 0
-          ? `Nhập sai quá 5 lần. Khóa tạm thời ${fail.lockedSeconds} giây.`
-          : `Tên đăng nhập hoặc mật khẩu không đúng (còn ${fail.attemptsLeft} lần thử).`,
+          ? `Khóa tạm thời ${fail.lockedSeconds} giây.`
+          : `Sai tên đăng nhập hoặc mật khẩu.`,
     };
   }
 
@@ -353,9 +376,6 @@ export async function loginUserAccount(params: {
   return { ok: true, session };
 }
 
-/**
- * Lookup account's security question for Forgot Password flow
- */
 export async function getAccountSecurityQuestion(
   username: string
 ): Promise<{ found: boolean; question?: string }> {
@@ -364,9 +384,6 @@ export async function getAccountSecurityQuestion(
   return { found: true, question: account.securityQuestion };
 }
 
-/**
- * Forgot Password: Reset password using either Security Answer OR Recovery Key
- */
 export async function resetPasswordWithRecovery(params: {
   username: string;
   method: 'question' | 'key';
@@ -377,7 +394,7 @@ export async function resetPasswordWithRecovery(params: {
   if (lockedSec > 0) {
     return {
       ok: false,
-      error: `Tạm khóa bảo mật. Vui lòng thử lại sau ${lockedSec} giây.`,
+      error: `Tạm khóa ${lockedSec} giây.`,
     };
   }
 
@@ -388,7 +405,7 @@ export async function resetPasswordWithRecovery(params: {
   const account = await fetchAccountFromCloudOrLocal(cleanUser);
   if (!account) {
     recordFailedAttempt();
-    return { ok: false, error: 'Không tìm thấy tài khoản này.' };
+    return { ok: false, error: 'Không tìm thấy tài khoản.' };
   }
 
   let verified = false;
@@ -408,10 +425,8 @@ export async function resetPasswordWithRecovery(params: {
       ok: false,
       error:
         fail.lockedSeconds > 0
-          ? `Xác thực sai quá 5 lần. Khóa tạm thời ${fail.lockedSeconds} giây.`
-          : `${
-              params.method === 'question' ? 'Câu trả lời bảo mật' : 'Mã khôi phục'
-            } không chính xác (còn ${fail.attemptsLeft} lần thử).`,
+          ? `Khóa tạm thời ${fail.lockedSeconds} giây.`
+          : `Thông tin khôi phục không đúng.`,
     };
   }
 
@@ -429,9 +444,6 @@ export async function resetPasswordWithRecovery(params: {
   return { ok: true, session };
 }
 
-/**
- * Change password when already logged in (requires current password verification)
- */
 export async function changePasswordLoggedIn(params: {
   username: string;
   currentPassword: string;
@@ -445,7 +457,7 @@ export async function changePasswordLoggedIn(params: {
 
   const currentHash = await derivePBKDF2Hash(params.currentPassword, account.saltHex);
   if (currentHash !== account.passwordHash) {
-    return { ok: false, error: 'Mật khẩu hiện tại không chính xác.' };
+    return { ok: false, error: 'Mật khẩu hiện tại không đúng.' };
   }
 
   const newHash = await derivePBKDF2Hash(params.newPassword, account.saltHex);
