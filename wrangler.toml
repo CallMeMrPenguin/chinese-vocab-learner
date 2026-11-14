@@ -1,0 +1,11 @@
+name = "chinese-vocab-learner"
+compatibility_date = "2025-01-01"
+pages_build_output_dir = "out"
+
+# Nếu bạn muốn bật đồng bộ đám mây qua Cloudflare D1 (5GB Free),
+# sau khi chạy: npx wrangler d1 create chinese-vocab-db
+# hãy bỏ dấu # ở 3 dòng dưới và dán database_id vào:
+# [[d1_databases]]
+# binding = "DB"
+# database_name = "chinese-vocab-db"
+# database_id = "THAY_DATABASE_ID_CUA_BAN_VAO_DAY"

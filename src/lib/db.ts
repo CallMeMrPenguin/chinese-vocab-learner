@@ -215,6 +215,7 @@ export async function refreshDeckStats(deckId: string): Promise<void> {
     healthPercent: avgHealth,
     updatedAt: now,
   });
+  queueCloudSync();
 }
 
 // Reset progress for a single mode or entire deck
@@ -258,4 +259,53 @@ export async function resetDeckProgress(
     await db.vocab.bulkPut(updated);
   }
   await refreshDeckStats(deckId);
+}
+
+// ── Optional Cloudflare Pages + D1 Auto-Sync ──────────────────────────────
+let latestSyncPayloadJson: string | null = null;
+let syncTimer: ReturnType<typeof setTimeout> | null = null;
+let unloadListenerAttached = false;
+
+async function buildSyncSnapshot(): Promise<string> {
+  const [folders, decks, vocab] = await Promise.all([
+    db.folders.toArray(),
+    db.decks.toArray(),
+    db.vocab.toArray(),
+  ]);
+  const payload = JSON.stringify({ folders, decks, vocab });
+  latestSyncPayloadJson = payload;
+  return payload;
+}
+
+export function queueCloudSync(): void {
+  if (typeof window === 'undefined') return;
+
+  if (!unloadListenerAttached) {
+    unloadListenerAttached = true;
+    const flushOnClose = () => {
+      if (latestSyncPayloadJson && navigator.sendBeacon) {
+        const blob = new Blob([latestSyncPayloadJson], { type: 'application/json' });
+        navigator.sendBeacon('/api/sync', blob);
+      }
+    };
+    window.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') flushOnClose();
+    });
+    window.addEventListener('pagehide', flushOnClose);
+  }
+
+  if (syncTimer) clearTimeout(syncTimer);
+  syncTimer = setTimeout(async () => {
+    try {
+      const json = await buildSyncSnapshot();
+      await fetch('/api/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: json,
+        keepalive: true,
+      });
+    } catch {
+      // Offline or local dev without /api/sync
+    }
+  }, 1200);
 }
