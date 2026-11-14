@@ -9,3 +9,8 @@ command = "npm run build"
 directory = "./out"
 binding = "ASSETS"
 run_worker_first = ["/api/*"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "chinese-vocab-db"
+database_id = "d3e6f5b1-93fa-4ef7-8746-1ce0f20ff283"
